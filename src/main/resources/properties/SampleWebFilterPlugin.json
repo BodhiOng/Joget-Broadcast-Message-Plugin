@@ -1,0 +1,13 @@
+[
+    {
+        "title" : "Sample Web Filter",
+        "properties" : [
+            {
+                "name" : "redirect",
+                "label" : "Redirect URL",
+                "type" : "textfield"
+            }
+        ]
+    }
+]
+
