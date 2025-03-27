@@ -1,0 +1,14 @@
+[
+    {
+        "title": "Sample JWT Login Filter",
+        "properties": [
+            {
+                "name": "publicKey",
+                "label": "Public Key",
+                "type": "textarea",
+                "value": "",
+                "required": "true"
+            }
+        ]
+    }
+]
