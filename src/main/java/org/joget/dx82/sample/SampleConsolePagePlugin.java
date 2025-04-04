@@ -1,14 +1,21 @@
 package org.joget.dx82.sample;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import static org.bouncycastle.internal.asn1.cms.CMSObjectIdentifiers.data;
+import org.joget.apps.app.model.AppDefinition;
+import org.joget.apps.app.model.AppImportExportAwarePlugin;
 import org.joget.apps.app.model.ConsolePagePluginAbstract;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.userview.service.UserviewUtil;
+import org.joget.commons.util.LogUtil;
 import org.joget.commons.util.PagedList;
 import org.joget.plugin.base.ConsolePagePlugin;
 import org.joget.plugin.base.PluginManager;
@@ -17,7 +24,7 @@ import org.joget.workflow.model.service.WorkflowManager;
 import org.joget.workflow.model.service.WorkflowUserManager;
 import org.json.JSONObject;
 
-public class SampleConsolePagePlugin extends ConsolePagePluginAbstract {
+public class SampleConsolePagePlugin extends ConsolePagePluginAbstract implements AppImportExportAwarePlugin {
 
     @Override
     public String getName() {
@@ -114,5 +121,66 @@ public class SampleConsolePagePlugin extends ConsolePagePluginAbstract {
         jsonObject.accumulate("desc", desc);
 
         AppUtil.writeJson(response.getWriter(), jsonObject, callback);
+    }
+
+    @Override
+    public String importAppConfigHtml() {
+        return "AppImportExportAwarePlugin is injected";
+    }
+
+    @Override
+    public void importAppPostProcessing(AppDefinition appDef, byte[] zip) {
+        //read the exported syystem variables from zip
+        ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(zip));
+        ZipEntry entry = null;
+
+        try {
+            while ((entry = in.getNextEntry()) != null) {
+                if (!entry.isDirectory()) {
+                    if (entry.getName().startsWith("testing.txt")) {
+                        ByteArrayOutputStream out = new ByteArrayOutputStream();
+                        
+                        try {
+                            int length;
+                            byte[] temp = new byte[1024];
+                            while ((length = in.read(temp, 0, 1024)) != -1) {
+                                out.write(temp, 0, length);
+                            }
+
+                            String text = new String(out.toByteArray(), "UTF-8");
+                            LogUtil.info(getClassName(), text);
+                        } finally {
+                            out.flush();
+                            out.close();
+                        }
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LogUtil.error(getClassName(), e, "fail to read zip");
+        } finally {
+            try {
+                in.close();
+            } catch (IOException ex) {
+                //ignore
+            }
+        }
+    }
+
+    @Override
+    public String exportAppConfigHtml() {
+        return "AppImportExportAwarePlugin is injected";
+    }
+
+    @Override
+    public void exportAppPostProcessing(AppDefinition appDef, ZipOutputStream zip) {
+        try {
+            zip.putNextEntry(new ZipEntry("testing.txt"));
+            zip.write("this is a test string".getBytes("UTF-8"));
+            zip.closeEntry();
+        } catch (Exception e) {
+            LogUtil.error(getClassName(), e, "Fail to export system variables");
+        }
     }
 }
