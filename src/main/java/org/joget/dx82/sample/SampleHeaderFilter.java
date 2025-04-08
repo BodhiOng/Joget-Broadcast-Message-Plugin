@@ -42,9 +42,9 @@ public class SampleHeaderFilter extends PluginWebFilterAbstract {
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain filterChain) throws IOException, ServletException {
-        filterChain.doFilter(request, response);
-        
         HttpServletResponse httpResponse = (HttpServletResponse) response;
         httpResponse.setHeader("X-Frame-Options", "DENY");
+        
+        filterChain.doFilter(request, response);
     }
 }
