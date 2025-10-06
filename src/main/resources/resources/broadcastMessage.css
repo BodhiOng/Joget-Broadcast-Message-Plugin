@@ -1,0 +1,113 @@
+/* Broadcast message styling */
+#broadcast_message_container .broadcast-message-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #0078d7;
+    color: white;
+    padding: 10px 0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: none;
+}
+
+#broadcast_message_container .broadcast-message-banner.show {
+    display: block;
+    animation: slideDown 0.5s ease-in-out;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+#broadcast_message_container .broadcast-message-content {
+    display: flex;
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+#broadcast_message_container .broadcast-icon {
+    margin-right: 15px;
+    font-size: 24px;
+}
+
+#broadcast_message_container .broadcast-text {
+    flex-grow: 1;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+#broadcast_message_container .broadcast-close {
+    cursor: pointer;
+    padding: 5px;
+    margin-left: 15px;
+}
+
+#broadcast_message_container .broadcast-close:hover {
+    opacity: 0.8;
+}
+
+/* Admin controls for broadcast message */
+#broadcast_message_container .admin-controls {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: white;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    z-index: 1000;
+}
+
+#broadcast_message_container .admin-controls i {
+    font-size: 20px;
+    color: #0078d7;
+}
+
+#broadcast_message_container .admin-panel {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 300px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    padding: 15px;
+    z-index: 1000;
+    display: none;
+}
+
+#broadcast_message_container .admin-panel.show {
+    display: block;
+}
+
+#broadcast_message_container .admin-panel textarea {
+    width: 100%;
+    height: 100px;
+    margin-bottom: 10px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+#broadcast_message_container .admin-panel button {
+    background-color: #0078d7;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#broadcast_message_container .admin-panel button:hover {
+    background-color: #0067b8;
+}

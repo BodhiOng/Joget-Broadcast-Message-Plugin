@@ -15,16 +15,18 @@ import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginManager;
 import org.joget.plugin.base.PluginWebSocket;
 import org.joget.workflow.util.WorkflowUtil;
+import org.joget.plugin.property.model.PropertyEditable;
 import org.json.JSONObject;
 
-public class SampleChatUiHtmlInjector extends UiHtmlInjectorPluginAbstract implements PluginWebSocket {
+public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract implements PluginWebSocket {
 
     private static Set<Session> clients = new CopyOnWriteArraySet<>();
     private static Map<String, List<String>> userClients = new HashMap<>();
+    private static String broadcastMessage = "IMPORTANT: System maintenance scheduled for today at 5:00 PM. Please save your work before this time.";
     
     @Override
     public String getName() {
-        return "SampleChatUiHtmlInjector";
+        return "Broadcast Message Plugin";
     }
 
     @Override
@@ -34,10 +36,9 @@ public class SampleChatUiHtmlInjector extends UiHtmlInjectorPluginAbstract imple
 
     @Override
     public String getDescription() {
-        return "";
+        return "A plugin to broadcast messages to all Joget users";
     }
     
-
     @Override
     public String[] getInjectUrlPatterns() {
         return new String[]{"/web/userview/**"};
@@ -50,7 +51,15 @@ public class SampleChatUiHtmlInjector extends UiHtmlInjectorPluginAbstract imple
         data.put("plugin", this);
         data.put("request", request);
         
-        String html = pluginManager.getPluginFreeMarkerTemplate(data, getClassName(), "/templates/SampleChatUiHtmlInjector.ftl", null);
+        // Use configured message or default to the static broadcastMessage
+        String configuredMessage = getPropertyString("message");
+        String messageToDisplay = (configuredMessage != null && !configuredMessage.trim().isEmpty()) 
+                                ? configuredMessage 
+                                : broadcastMessage;
+        
+        data.put("message", messageToDisplay);
+        
+        String html = pluginManager.getPluginFreeMarkerTemplate(data, getClassName(), "/templates/BroadcastMessagePlugin.ftl", null);
         return html;
     }
     
@@ -92,11 +101,15 @@ public class SampleChatUiHtmlInjector extends UiHtmlInjectorPluginAbstract imple
             addSession(username, session.getId());
             LogUtil.info(getClassName(), "Connection established - " + session.getId() + " - " + username);
             
-            if(username.equalsIgnoreCase("roleAnonymous")){
-                username += "-" + session.getId();
-            }
+            // Send the current broadcast message to the new client
+            String configuredMessage = getPropertyString("message");
+            String messageToSend = (configuredMessage != null && !configuredMessage.trim().isEmpty()) 
+                                ? configuredMessage 
+                                : broadcastMessage;
             
-            broadCastMessage("User <" + username + "> joined", "System", session);
+            if (messageToSend != null && !messageToSend.isEmpty()) {
+                sendMessageToClient(messageToSend, "System", session);
+            }
             
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "onOpen Error");
@@ -106,53 +119,41 @@ public class SampleChatUiHtmlInjector extends UiHtmlInjectorPluginAbstract imple
     @Override
     public void onMessage(String message, Session session) {
         try {
-            broadCastMessage(message, "",session);
+            // Only admin users can broadcast messages
+            String username = WorkflowUtil.getCurrentUsername();
+            if (WorkflowUtil.isCurrentUserInRole("ROLE_ADMIN")) {
+                broadcastMessage(message, username, session);
+                // Update the stored message
+                broadcastMessage = message;
+            }
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "onMessage Error");
         }
     }
 
-    public void broadCastMessage(String message, String author, Session currentSession){
+    public void broadcastMessage(String message, String author, Session currentSession) {
         try {
-            String username = "";
-            if(!author.equalsIgnoreCase("System")){
-                username = WorkflowUtil.getCurrentUsername();
-                if(username.equals("roleAnonymous")){
-                    author = username + "-" + currentSession.getId();
-                }else{
-                    author = username;
+            // Broadcast to all connected clients
+            for (Session client : clients) {
+                if (client.isOpen()) {
+                    sendMessageToClient(message, author, client);
                 }
             }
-            
+        } catch (Exception e) {
+            LogUtil.error(getClassName(), e, "broadcastMessage Error");
+        }
+    }
+    
+    private void sendMessageToClient(String message, String author, Session client) {
+        try {
             JSONObject jsonMessage = new JSONObject();
             jsonMessage.put("message", message);
             jsonMessage.put("author", author);
+            jsonMessage.put("timestamp", System.currentTimeMillis());
             
-            // Universal the message to all connected clients
-            for (Session client : clients) {
-                if (client.isOpen()) {
-                    if(username.equals("roleAnonymous") && client.getId().equals(currentSession.getId())){
-                        //anonymous user, each session is unique, DIFFERENT user context for each
-                        jsonMessage.put("sentByMe", true);
-                    }else if(!username.equals("roleAnonymous") && findUserBySession(client.getId()).equals(username)){
-                        //logged in user with multiple sessions, same user context
-                        jsonMessage.put("sentByMe", true);
-                    }else{
-                        jsonMessage.put("sentByMe", false);
-                    }
-                    
-                    try {
-                        //if(client.isOpen()){
-                            client.getBasicRemote().sendText(jsonMessage.toString());
-                        //}
-                    } catch (Exception e) {
-                        LogUtil.error(getClassName(), e, "sendText Error");
-                    }
-                }
-            }
-        
+            client.getBasicRemote().sendText(jsonMessage.toString());
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "broadCastMessage Error");
+            LogUtil.error(getClassName(), e, "sendMessageToClient Error");
         }
     }
     
@@ -161,10 +162,8 @@ public class SampleChatUiHtmlInjector extends UiHtmlInjectorPluginAbstract imple
         try {
             String userLeft = findUserBySession(session.getId());
             removeSession(session.getId());
-            LogUtil.info(getClassName(), "Webscoket connection closed - " + session.getId() + " - " + userLeft);
+            LogUtil.info(getClassName(), "WebSocket connection closed - " + session.getId() + " - " + userLeft);
             clients.remove(session);
-            broadCastMessage("User <" + userLeft + "-" + session.getId() + "> left", "System", session);
-            
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "onClose Error");
         }
@@ -179,7 +178,7 @@ public class SampleChatUiHtmlInjector extends UiHtmlInjectorPluginAbstract imple
     public boolean isIncludeForAjaxThemePageSwitching() {
         return false;
     }
-
+    
     public String[] getPropertyOptions() {
         String[] propertyOptions = {
             "message", 
