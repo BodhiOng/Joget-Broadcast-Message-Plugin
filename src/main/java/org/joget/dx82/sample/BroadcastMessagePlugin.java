@@ -7,15 +7,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.websocket.Session;
+
 import org.joget.apps.app.model.UiHtmlInjectorPluginAbstract;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginManager;
 import org.joget.plugin.base.PluginWebSocket;
 import org.joget.workflow.util.WorkflowUtil;
-import org.joget.plugin.property.model.PropertyEditable;
 import org.json.JSONObject;
 
 public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract implements PluginWebSocket {
@@ -23,7 +24,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     private static Set<Session> clients = new CopyOnWriteArraySet<>();
     private static Map<String, List<String>> userClients = new HashMap<>();
     private static String broadcastMessage = "IMPORTANT: System maintenance scheduled for today at 5:00 PM. Please save your work before this time.";
-    
+
     @Override
     public String getName() {
         return "Broadcast Message Plugin";
@@ -31,17 +32,17 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
     @Override
     public String getVersion() {
-        return "8.2.0";
+        return "1.0.0";
     }
 
     @Override
     public String getDescription() {
         return "A plugin to broadcast messages to all Joget users";
     }
-    
+
     @Override
     public String[] getInjectUrlPatterns() {
-        return new String[]{"/web/userview/**"};
+        return new String[] { "/web/userview/**" };
     }
 
     @Override
@@ -50,19 +51,20 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         Map data = new HashMap();
         data.put("plugin", this);
         data.put("request", request);
-        
+
         // Use configured message or default to the static broadcastMessage
         String configuredMessage = getPropertyString("message");
-        String messageToDisplay = (configuredMessage != null && !configuredMessage.trim().isEmpty()) 
-                                ? configuredMessage 
-                                : broadcastMessage;
-        
+        String messageToDisplay = (configuredMessage != null && !configuredMessage.trim().isEmpty())
+                ? configuredMessage
+                : broadcastMessage;
+
         data.put("message", messageToDisplay);
-        
-        String html = pluginManager.getPluginFreeMarkerTemplate(data, getClassName(), "/templates/BroadcastMessagePlugin.ftl", null);
+
+        String html = pluginManager.getPluginFreeMarkerTemplate(data, getClassName(),
+                "/templates/BroadcastMessagePlugin.ftl", null);
         return html;
     }
-    
+
     public void addSession(String user, String session) {
         userClients.computeIfAbsent(user, k -> new ArrayList<>()).add(session);
         LogUtil.info(getClassName(), "All sessions - " + userClients.toString());
@@ -76,9 +78,9 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         }
         return "";
     }
-    
+
     public void removeSession(String sessionToRemove) {
-        for (Iterator<Map.Entry<String, List<String>>> it = userClients.entrySet().iterator(); it.hasNext(); ) {
+        for (Iterator<Map.Entry<String, List<String>>> it = userClients.entrySet().iterator(); it.hasNext();) {
             Map.Entry<String, List<String>> entry = it.next();
             List<String> sessions = entry.getValue();
 
@@ -100,22 +102,22 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             clients.add(session);
             addSession(username, session.getId());
             LogUtil.info(getClassName(), "Connection established - " + session.getId() + " - " + username);
-            
+
             // Send the current broadcast message to the new client
             String configuredMessage = getPropertyString("message");
-            String messageToSend = (configuredMessage != null && !configuredMessage.trim().isEmpty()) 
-                                ? configuredMessage 
-                                : broadcastMessage;
-            
+            String messageToSend = (configuredMessage != null && !configuredMessage.trim().isEmpty())
+                    ? configuredMessage
+                    : broadcastMessage;
+
             if (messageToSend != null && !messageToSend.isEmpty()) {
                 sendMessageToClient(messageToSend, "System", session);
             }
-            
+
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "onOpen Error");
         }
     }
-    
+
     @Override
     public void onMessage(String message, Session session) {
         try {
@@ -143,20 +145,20 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             LogUtil.error(getClassName(), e, "broadcastMessage Error");
         }
     }
-    
+
     private void sendMessageToClient(String message, String author, Session client) {
         try {
             JSONObject jsonMessage = new JSONObject();
             jsonMessage.put("message", message);
             jsonMessage.put("author", author);
             jsonMessage.put("timestamp", System.currentTimeMillis());
-            
+
             client.getBasicRemote().sendText(jsonMessage.toString());
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "sendMessageToClient Error");
         }
     }
-    
+
     @Override
     public void onClose(Session session) {
         try {
@@ -168,7 +170,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             LogUtil.error(getClassName(), e, "onClose Error");
         }
     }
-    
+
     @Override
     public void onError(Session session, Throwable throwable) {
         LogUtil.error(getClassName(), throwable, "");
@@ -178,13 +180,13 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     public boolean isIncludeForAjaxThemePageSwitching() {
         return false;
     }
-    
+
     public String[] getPropertyOptions() {
         String[] propertyOptions = {
-            "message", 
-            "textarea", 
-            "Broadcast Message", 
-            "Enter the message to broadcast to all users"
+                "message",
+                "textarea",
+                "Broadcast Message",
+                "Enter the message to broadcast to all users"
         };
         return propertyOptions;
     }

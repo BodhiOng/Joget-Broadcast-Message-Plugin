@@ -219,3 +219,6 @@ nbdist/
 #################
 
 wflow-consoleweb/src/main/webapp/wro/
+
+# VSCode
+.vscode/
