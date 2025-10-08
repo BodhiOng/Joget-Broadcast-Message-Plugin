@@ -14,7 +14,7 @@ public class Activator implements BundleActivator {
     public void start(BundleContext context) {
         registrationList = new ArrayList<ServiceRegistration>();
 
-        //Register plugin here
+        //Register plugins here
         registrationList.add(context.registerService(BroadcastMessagePlugin.class.getName(), new BroadcastMessagePlugin(), null));
     }
 

@@ -39,12 +39,29 @@
     flex-grow: 1;
     font-size: 16px;
     font-weight: 500;
+    text-align: center;
 }
 
 #broadcast_message_container .broadcast-close {
     cursor: pointer;
     padding: 5px;
     margin-left: 15px;
+}
+
+#broadcast_message_container .mark-as-read-btn {
+    background-color: #ffffff;
+    color: #0078d7;
+    border: 1px solid #0078d7;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#broadcast_message_container .mark-as-read-btn:hover {
+    background-color: #0078d7;
+    color: #ffffff;
 }
 
 #broadcast_message_container .broadcast-close:hover {

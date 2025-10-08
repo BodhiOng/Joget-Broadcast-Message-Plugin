@@ -11,8 +11,13 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import javax.servlet.http.HttpServletRequest;
 import javax.websocket.Session;
 
+import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.UiHtmlInjectorPluginAbstract;
+import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
+import org.joget.apps.form.dao.FormDataDao;
+import org.joget.apps.form.model.FormRow;
+import org.joget.apps.form.model.FormRowSet;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginManager;
 import org.joget.plugin.base.PluginWebSocket;
@@ -23,7 +28,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
     private static Set<Session> clients = new CopyOnWriteArraySet<>();
     private static Map<String, List<String>> userClients = new HashMap<>();
-    private static String broadcastMessage = "IMPORTANT: System maintenance scheduled for today at 5:00 PM. Please save your work before this time.";
+    private static String defaultBroadcastMessage = "IMPORTANT: System maintenance scheduled for today at 5:00 PM. Please save your work before this time.";
 
     @Override
     public String getName() {
@@ -45,6 +50,123 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         return new String[] { "/web/userview/**" };
     }
 
+    /**
+     * Fetches the latest unread message from the configured CRUD form
+     * 
+     * @return The message text or null if no unread message is found
+     */
+    protected String getMessageFromCrud() {
+        try {
+            // Hardcoded CRUD configuration
+            String appId = "broadcast_memo_plugin_app"; // Replace with your actual app ID
+            String formId = "broadcast_messages"; // Replace with your actual form ID
+            String messageField = "message_text"; // Replace with your message field ID
+            String statusField = "status"; // Field containing read/unread status
+            String priorityField = "priority"; // Replace with your priority field ID
+
+            // Get the AppDefinition
+            AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
+            AppDefinition appDef = appService.getPublishedAppDefinition(appId);
+
+            if (appDef == null) {
+                LogUtil.warn(getClassName(), "App not found: " + appId);
+                return null;
+            }
+
+            // Skip loading the form definition and access form data directly
+            // This is more compatible across different Joget versions
+
+            // Get form data
+            FormDataDao formDataDao = (FormDataDao) AppUtil.getApplicationContext().getBean("formDataDao");
+            FormRowSet rowSet = formDataDao.find(formId, null, null, null, null, null, null, null);
+
+            LogUtil.info(getClassName(),
+                    "Found " + (rowSet != null ? rowSet.size() : 0) + " messages in form: " + formId);
+
+            if (rowSet == null || rowSet.isEmpty()) {
+                LogUtil.info(getClassName(), "No messages found in form: " + formId);
+                return null;
+            }
+
+            // Status (read/unread) and priority fields are hardcoded above
+
+            // Sort by priority if available
+            FormRow selectedRow = null;
+            int highestPriority = -1;
+
+            for (FormRow row : rowSet) {
+                // Log all message fields for debugging
+                String msgText = row.getProperty(messageField);
+                String statusValue = row.getProperty(statusField);
+                String priorityValue = row.getProperty(priorityField);
+                LogUtil.info(getClassName(), "Message found - Text: " + msgText + ", Status: " + statusValue
+                        + ", Priority: " + priorityValue);
+
+                // Check if message is unread - accept various forms like "unread", "Unread",
+                // "UNREAD", "new", etc.
+                if (!statusField.isEmpty()) {
+                    if (statusValue == null) {
+                        LogUtil.info(getClassName(), "Skipping message because status is null");
+                        continue; // Skip messages with null status
+                    }
+
+                    // Accept various forms of "unread" status
+                    String statusLower = statusValue.toLowerCase();
+                    boolean isUnread = statusLower.contains("unread") ||
+                            statusLower.contains("new") ||
+                            statusLower.equals("1") ||
+                            statusLower.equals("true");
+
+                    if (!isUnread) {
+                        LogUtil.info(getClassName(),
+                                "Skipping message because status is not recognized as unread: '" + statusValue + "'");
+                        continue; // Skip read messages
+                    } else {
+                        LogUtil.info(getClassName(), "Found unread message with status: '" + statusValue + "'");
+                    }
+                }
+
+                // Get priority if available
+                int priority = 0;
+                if (!priorityField.isEmpty()) {
+                    // priorityValue was already defined above, so we'll use it directly
+                    if (priorityValue != null && !priorityValue.isEmpty()) {
+                        try {
+                            priority = Integer.parseInt(priorityValue);
+                        } catch (NumberFormatException e) {
+                            // Use default priority 0
+                        }
+                    }
+                }
+
+                // Select highest priority message or first unread message
+                if (selectedRow == null || priority > highestPriority) {
+                    selectedRow = row;
+                    highestPriority = priority;
+                }
+            }
+
+            // Return the message text
+            if (selectedRow != null) {
+                String message = selectedRow.getProperty(messageField);
+                if (message != null && !message.isEmpty()) {
+                    LogUtil.info(getClassName(), "Selected message to display: " + message);
+                    return message;
+                } else {
+                    LogUtil.info(getClassName(), "Selected row has empty message");
+                }
+            } else {
+                LogUtil.info(getClassName(), "No unread message was selected");
+            }
+
+            return null;
+
+        } catch (Exception e) {
+            LogUtil.error(getClassName(), e, "Error fetching message from CRUD");
+            return null;
+        }
+    }
+
     @Override
     public String getHtml(HttpServletRequest request) {
         PluginManager pluginManager = (PluginManager) AppUtil.getApplicationContext().getBean("pluginManager");
@@ -52,11 +174,15 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         data.put("plugin", this);
         data.put("request", request);
 
-        // Use configured message or default to the static broadcastMessage
-        String configuredMessage = getPropertyString("message");
-        String messageToDisplay = (configuredMessage != null && !configuredMessage.trim().isEmpty())
-                ? configuredMessage
-                : broadcastMessage;
+        // Always get message from CRUD
+        String messageToDisplay;
+        String crudMessage = getMessageFromCrud();
+        if (crudMessage != null && !crudMessage.isEmpty()) {
+            messageToDisplay = crudMessage;
+        } else {
+            // Fall back to default message if CRUD message not found
+            messageToDisplay = defaultBroadcastMessage;
+        }
 
         data.put("message", messageToDisplay);
 
@@ -103,11 +229,15 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             addSession(username, session.getId());
             LogUtil.info(getClassName(), "Connection established - " + session.getId() + " - " + username);
 
-            // Send the current broadcast message to the new client
-            String configuredMessage = getPropertyString("message");
-            String messageToSend = (configuredMessage != null && !configuredMessage.trim().isEmpty())
-                    ? configuredMessage
-                    : broadcastMessage;
+            // Always get message from CRUD
+            String messageToSend;
+            String crudMessage = getMessageFromCrud();
+            if (crudMessage != null && !crudMessage.isEmpty()) {
+                messageToSend = crudMessage;
+            } else {
+                // Fall back to default message if CRUD message not found
+                messageToSend = defaultBroadcastMessage;
+            }
 
             if (messageToSend != null && !messageToSend.isEmpty()) {
                 sendMessageToClient(messageToSend, "System", session);
@@ -124,9 +254,8 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             // Only admin users can broadcast messages
             String username = WorkflowUtil.getCurrentUsername();
             if (WorkflowUtil.isCurrentUserInRole("ROLE_ADMIN")) {
+                // Broadcast the message to all clients
                 broadcastMessage(message, username, session);
-                // Update the stored message
-                broadcastMessage = message;
             }
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "onMessage Error");
@@ -137,7 +266,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         try {
             // Broadcast to all connected clients
             for (Session client : clients) {
-                if (client.isOpen()) {
+                if (client.isOpen() && !client.getId().equals(currentSession.getId())) {
                     sendMessageToClient(message, author, client);
                 }
             }
@@ -182,12 +311,8 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     }
 
     public String[] getPropertyOptions() {
-        String[] propertyOptions = {
-                "message",
-                "textarea",
-                "Broadcast Message",
-                "Enter the message to broadcast to all users"
-        };
+        // No configurable properties in this simplified version
+        String[] propertyOptions = {};
         return propertyOptions;
     }
 }

@@ -43,7 +43,7 @@
             console.error("WebSocket error", event);
         };
         
-        // Close button functionality
+        // Mark as Read button functionality
         container.find('#broadcastClose').on('click', function() {
             container.find('.broadcast-message-banner').removeClass('show');
             // Store in localStorage that this message has been read
@@ -51,6 +51,10 @@
             if (messageText) {
                 messageReadStatus[messageText] = true;
                 localStorage.setItem('broadcastMessageReadStatus', JSON.stringify(messageReadStatus));
+                
+                // Optional: You could add code here to update the status in the database
+                // For example, make an AJAX call to mark the message as read in the CRUD form
+                console.log("Message marked as read: " + messageText);
             }
         });
         

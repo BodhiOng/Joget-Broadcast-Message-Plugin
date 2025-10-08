@@ -11,7 +11,7 @@
                 ${message!}
             </div>
             <div class="broadcast-close" id="broadcastClose">
-                <i class="fas fa-times"></i>
+                <button class="mark-as-read-btn">Mark as Read</button>
             </div>
         </div>
     </div>

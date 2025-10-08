@@ -4,7 +4,7 @@
     <groupId>org.joget.dx82.sample</groupId>
     <artifactId>broadcast-message-ui-html-injector</artifactId>
     <packaging>bundle</packaging>
-    <version>8.2.0</version>
+    <version>1.0.0</version>
     <name>Broadcast-Message-UI-HTML-Injector</name>
     <url>http://www.joget.org</url>
     <build>
