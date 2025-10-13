@@ -51,9 +51,9 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     }
 
     /**
-     * Fetches the latest unread message from the configured CRUD form
+     * Fetches the first message from the configured CRUD form
      * 
-     * @return The message text or null if no unread message is found
+     * @return The message text or null if no message is found
      */
     protected String getMessageFromCrud() {
         try {
@@ -61,8 +61,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             String appId = "broadcast_memo_plugin_app"; // Replace with your actual app ID
             String formId = "broadcast_messages"; // Replace with your actual form ID
             String messageField = "message_text"; // Replace with your message field ID
-            String statusField = "status"; // Field containing read/unread status
-            String priorityField = "priority"; // Replace with your priority field ID
 
             // Get the AppDefinition
             AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
@@ -88,75 +86,18 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 return null;
             }
 
-            // Status (read/unread) and priority fields are hardcoded above
-
-            // Sort by priority if available
-            FormRow selectedRow = null;
-            int highestPriority = -1;
-
-            for (FormRow row : rowSet) {
-                // Log all message fields for debugging
-                String msgText = row.getProperty(messageField);
-                String statusValue = row.getProperty(statusField);
-                String priorityValue = row.getProperty(priorityField);
-                LogUtil.info(getClassName(), "Message found - Text: " + msgText + ", Status: " + statusValue
-                        + ", Priority: " + priorityValue);
-
-                // Check if message is unread - accept various forms like "unread", "Unread",
-                // "UNREAD", "new", etc.
-                if (!statusField.isEmpty()) {
-                    if (statusValue == null) {
-                        LogUtil.info(getClassName(), "Skipping message because status is null");
-                        continue; // Skip messages with null status
-                    }
-
-                    // Accept various forms of "unread" status
-                    String statusLower = statusValue.toLowerCase();
-                    boolean isUnread = statusLower.contains("unread") ||
-                            statusLower.contains("new") ||
-                            statusLower.equals("1") ||
-                            statusLower.equals("true");
-
-                    if (!isUnread) {
-                        LogUtil.info(getClassName(),
-                                "Skipping message because status is not recognized as unread: '" + statusValue + "'");
-                        continue; // Skip read messages
-                    } else {
-                        LogUtil.info(getClassName(), "Found unread message with status: '" + statusValue + "'");
-                    }
-                }
-
-                // Get priority if available
-                int priority = 0;
-                if (!priorityField.isEmpty()) {
-                    // priorityValue was already defined above, so we'll use it directly
-                    if (priorityValue != null && !priorityValue.isEmpty()) {
-                        try {
-                            priority = Integer.parseInt(priorityValue);
-                        } catch (NumberFormatException e) {
-                            // Use default priority 0
-                        }
-                    }
-                }
-
-                // Select highest priority message or first unread message
-                if (selectedRow == null || priority > highestPriority) {
-                    selectedRow = row;
-                    highestPriority = priority;
-                }
-            }
+            // Simply get the first message
+            FormRow selectedRow = rowSet.iterator().next();
+            String msgText = selectedRow.getProperty(messageField);
+            LogUtil.info(getClassName(), "Message found - Text: " + msgText);
 
             // Return the message text
-            if (selectedRow != null) {
-                String message = selectedRow.getProperty(messageField);
-                if (message != null && !message.isEmpty()) {
-                    LogUtil.info(getClassName(), "Selected message to display: " + message);
-                    return message;
-                } else {
-                    LogUtil.info(getClassName(), "Selected row has empty message");
-                }
+            String message = selectedRow.getProperty(messageField);
+            if (message != null && !message.isEmpty()) {
+                LogUtil.info(getClassName(), "Selected message to display: " + message);
+                return message;
             } else {
-                LogUtil.info(getClassName(), "No unread message was selected");
+                LogUtil.info(getClassName(), "Selected row has empty message");
             }
 
             return null;
