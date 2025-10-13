@@ -1,6 +1,6 @@
 <div id="broadcast_message_container">
-    <link rel="stylesheet" href="${request.contextPath}/plugin/org.joget.dx82.sample.BroadcastMessagePlugin/broadcastMessage.css">
-    <script src="${request.contextPath}/plugin/org.joget.dx82.sample.BroadcastMessagePlugin/broadcastMessage.js"></script>
+    <link rel="stylesheet" href="${request.contextPath}/plugin/org.joget.marketplace.BroadcastMessagePlugin/broadcastMessage.css">
+    <script src="${request.contextPath}/plugin/org.joget.marketplace.BroadcastMessagePlugin/broadcastMessage.js"></script>
 
     <div class="broadcast-message-banner show" id="broadcastBanner">
         <div class="broadcast-message-content">

@@ -1,4 +1,4 @@
-package org.joget.dx82.sample;
+package org.joget.marketplace;
 
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;

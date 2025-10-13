@@ -1,4 +1,4 @@
-package org.joget.dx82.sample;
+package org.joget.marketplace;
 
 import java.util.ArrayList;
 import java.util.HashMap;
