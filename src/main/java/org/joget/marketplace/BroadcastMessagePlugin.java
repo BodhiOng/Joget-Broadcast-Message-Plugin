@@ -22,13 +22,17 @@ import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginManager;
 import org.joget.plugin.base.PluginWebSocket;
 import org.joget.workflow.util.WorkflowUtil;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract implements PluginWebSocket {
 
     private static Set<Session> clients = new CopyOnWriteArraySet<>();
     private static Map<String, List<String>> userClients = new HashMap<>();
-    private static String defaultBroadcastMessage = "IMPORTANT: System maintenance scheduled for today at 5:00 PM. Please save your work before this time.";
+    private static String defaultBroadcastMessage = "No memos available as of now";
+    
+    // Pagination settings
+    private static final int DEFAULT_PAGE_SIZE = 5;
 
     @Override
     public String getName() {
@@ -51,11 +55,15 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     }
 
     /**
-     * Fetches the first message from the configured CRUD form
+     * Fetches all messages from the configured CRUD form
      * 
-     * @return The message text or null if no message is found
+     * @return A map containing all the messages
      */
-    protected String getMessageFromCrud() {
+    protected Map<String, Object> getMessagesFromCrud() {
+        Map<String, Object> result = new HashMap<>();
+        List<Map<String, String>> messages = new ArrayList<>();
+        result.put("messages", messages);
+        
         try {
             // Hardcoded CRUD configuration
             String appId = "broadcast_memo_plugin_app"; // Replace with your actual app ID
@@ -68,44 +76,83 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
             if (appDef == null) {
                 LogUtil.warn(getClassName(), "App not found: " + appId);
-                return null;
+                return result;
             }
-
-            // Skip loading the form definition and access form data directly
-            // This is more compatible across different Joget versions
 
             // Get form data
             FormDataDao formDataDao = (FormDataDao) AppUtil.getApplicationContext().getBean("formDataDao");
-            FormRowSet rowSet = formDataDao.find(formId, null, null, null, null, null, null, null);
-
-            LogUtil.info(getClassName(),
-                    "Found " + (rowSet != null ? rowSet.size() : 0) + " messages in form: " + formId);
-
-            if (rowSet == null || rowSet.isEmpty()) {
+            
+            // Get all messages
+            FormRowSet allRows = formDataDao.find(formId, null, null, null, null, null, null, null);
+            int totalMessages = allRows != null ? allRows.size() : 0;
+            
+            LogUtil.info(getClassName(), "Found " + totalMessages + " total messages in form: " + formId);
+            
+            if (totalMessages == 0) {
                 LogUtil.info(getClassName(), "No messages found in form: " + formId);
-                return null;
+                return result;
             }
-
-            // Simply get the first message
-            FormRow selectedRow = rowSet.iterator().next();
-            String msgText = selectedRow.getProperty(messageField);
-            LogUtil.info(getClassName(), "Message found - Text: " + msgText);
-
-            // Return the message text
-            String message = selectedRow.getProperty(messageField);
-            if (message != null && !message.isEmpty()) {
-                LogUtil.info(getClassName(), "Selected message to display: " + message);
-                return message;
-            } else {
-                LogUtil.info(getClassName(), "Selected row has empty message");
+            
+            // Get all messages without sorting to avoid NullPointerException
+            LogUtil.info(getClassName(), "Getting messages without sorting to avoid potential errors");
+            FormRowSet allRowsForPage = formDataDao.find(formId, null, null, null, null, null, null, null);
+            
+            // Add all messages to the result
+            for (FormRow row : allRowsForPage) {
+                Map<String, String> message = new HashMap<>();
+                String id = row.getId();
+                String text = row.getProperty(messageField);
+                
+                message.put("id", id);
+                message.put("text", text != null ? text : "");
+                
+                messages.add(message);
+                LogUtil.info(getClassName(), "Added message to result: " + text);
             }
-
-            return null;
-
+            
+            // Log messages before sorting
+            LogUtil.info(getClassName(), "Messages before sorting:");
+            for (Map<String, String> msg : messages) {
+                LogUtil.info(getClassName(), "- " + msg.get("text"));
+            }
+            
+            // Sort messages by text content
+            messages.sort((m1, m2) -> {
+                String text1 = m1.get("text");
+                String text2 = m2.get("text");
+                return text1 != null && text2 != null ? text1.compareTo(text2) : 0;
+            });
+            
+            // Log messages after sorting
+            LogUtil.info(getClassName(), "Messages after sorting by text:");
+            for (Map<String, String> msg : messages) {
+                LogUtil.info(getClassName(), "- " + msg.get("text"));
+            }
+            
+            LogUtil.info(getClassName(), "Returning " + messages.size() + " sorted messages");
+            
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "Error fetching message from CRUD");
-            return null;
+            LogUtil.error(getClassName(), e, "Error fetching messages from CRUD");
         }
+        
+        return result;
+    }
+    
+    /**
+     * Fetches the first message from the configured CRUD form
+     * For backward compatibility
+     * 
+     * @return The message text or null if no message is found
+     */
+    protected String getMessageFromCrud() {
+        Map<String, Object> result = getMessagesFromCrud();
+        List<Map<String, String>> messages = (List<Map<String, String>>) result.get("messages");
+        
+        if (messages != null && !messages.isEmpty()) {
+            return messages.get(0).get("text");
+        }
+        
+        return null;
     }
 
     @Override
@@ -114,18 +161,29 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         Map data = new HashMap();
         data.put("plugin", this);
         data.put("request", request);
-
-        // Always get message from CRUD
-        String messageToDisplay;
-        String crudMessage = getMessageFromCrud();
-        if (crudMessage != null && !crudMessage.isEmpty()) {
-            messageToDisplay = crudMessage;
+        
+        // Get all messages
+        Map<String, Object> messagesData = getMessagesFromCrud();
+        
+        // For backward compatibility
+        List<Map<String, String>> messages = (List<Map<String, String>>) messagesData.get("messages");
+        int messageCount = messages != null ? messages.size() : 0;
+        
+        // Convert messagesData to JSON string
+        JSONObject jsonMessagesData = new JSONObject(messagesData);
+        String messagesDataJson = jsonMessagesData.toString();
+        LogUtil.info(getClassName(), "Messages data JSON: " + messagesDataJson);
+        LogUtil.info(getClassName(), "Number of messages: " + messageCount);
+        
+        // Pass data to template
+        data.put("messagesData", messagesDataJson);
+        data.put("messageCount", messageCount);
+        if (messages != null && !messages.isEmpty()) {
+            data.put("message", messages.get(0).get("text"));
         } else {
-            // Fall back to default message if CRUD message not found
-            messageToDisplay = defaultBroadcastMessage;
+            // Fall back to default message if no messages found
+            data.put("message", defaultBroadcastMessage);
         }
-
-        data.put("message", messageToDisplay);
 
         String html = pluginManager.getPluginFreeMarkerTemplate(data, getClassName(),
                 "/templates/BroadcastMessagePlugin.ftl", null);
@@ -170,36 +228,94 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             addSession(username, session.getId());
             LogUtil.info(getClassName(), "Connection established - " + session.getId() + " - " + username);
 
-            // Always get message from CRUD
-            String messageToSend;
-            String crudMessage = getMessageFromCrud();
-            if (crudMessage != null && !crudMessage.isEmpty()) {
-                messageToSend = crudMessage;
+            // Get all messages
+            Map<String, Object> messagesData = getMessagesFromCrud();
+            List<Map<String, String>> messages = (List<Map<String, String>>) messagesData.get("messages");
+            
+            if (messages != null && !messages.isEmpty()) {
+                // Send all messages to the client
+                sendMessagesToClient(messages, messagesData, session);
             } else {
-                // Fall back to default message if CRUD message not found
-                messageToSend = defaultBroadcastMessage;
-            }
-
-            if (messageToSend != null && !messageToSend.isEmpty()) {
-                sendMessageToClient(messageToSend, "System", session);
+                // Fall back to default message if no messages found
+                sendMessageToClient(defaultBroadcastMessage, "System", session);
             }
 
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "onOpen Error");
         }
     }
+    
+    /**
+     * Sends multiple messages to a client with pagination metadata
+     * 
+     * @param messages List of message maps
+     * @param paginationData Pagination metadata
+     * @param client The WebSocket session
+     */
+    private void sendMessagesToClient(List<Map<String, String>> messages, Map<String, Object> paginationData, Session client) {
+        try {
+            JSONObject jsonResponse = new JSONObject();
+            
+            // Handle messages array safely
+            if (messages != null) {
+                // Convert each message to a JSONObject to ensure proper serialization
+                JSONArray jsonMessages = new JSONArray();
+                for (Map<String, String> message : messages) {
+                    JSONObject jsonMessage = new JSONObject();
+                    for (Map.Entry<String, String> entry : message.entrySet()) {
+                        jsonMessage.put(entry.getKey(), entry.getValue() != null ? entry.getValue() : "");
+                    }
+                    jsonMessages.put(jsonMessage);
+                }
+                jsonResponse.put("messages", jsonMessages);
+            } else {
+                jsonResponse.put("messages", new JSONArray());
+            }
+            
+            // Set pagination data based on the actual number of messages
+            int messageCount = messages != null ? messages.size() : 0;
+            jsonResponse.put("currentPage", 1); // Always start at page 1
+            jsonResponse.put("pageSize", DEFAULT_PAGE_SIZE);
+            jsonResponse.put("totalMessages", messageCount);
+            jsonResponse.put("totalPages", messageCount); // Each message is its own page
+            
+            LogUtil.info(getClassName(), "Sending WebSocket response with " + messageCount + " messages, totalPages: " + messageCount);
+            jsonResponse.put("timestamp", System.currentTimeMillis());
+            jsonResponse.put("type", "messages");
+            
+            client.getBasicRemote().sendText(jsonResponse.toString());
+        } catch (Exception e) {
+            LogUtil.error(getClassName(), e, "sendMessagesToClient Error: " + e.getMessage());
+        }
+    }
 
     @Override
     public void onMessage(String message, Session session) {
         try {
-            // Only admin users can broadcast messages
-            String username = WorkflowUtil.getCurrentUsername();
-            if (WorkflowUtil.isCurrentUserInRole("ROLE_ADMIN")) {
-                // Broadcast the message to all clients
-                broadcastMessage(message, username, session);
+            // Try to parse as JSON first
+            try {
+                JSONObject jsonMessage = new JSONObject(message);
+                String messageType = jsonMessage.optString("type", "");
+                
+                if ("broadcast".equals(messageType)) {
+                    // Only admin users can broadcast messages
+                    String username = WorkflowUtil.getCurrentUsername();
+                    if (WorkflowUtil.isCurrentUserInRole("ROLE_ADMIN")) {
+                        // Broadcast the message to all clients
+                        String broadcastText = jsonMessage.optString("text", "");
+                        broadcastMessage(broadcastText, username, session);
+                    }
+                }
+            } catch (Exception jsonEx) {
+                // Legacy support for simple string messages
+                String username = WorkflowUtil.getCurrentUsername();
+                if (WorkflowUtil.isCurrentUserInRole("ROLE_ADMIN")) {
+                    // Broadcast the message to all clients
+                    broadcastMessage(message, username, session);
+                }
             }
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "onMessage Error");
+            LogUtil.error(getClassName(), e, "onMessage Error: " + e.getMessage());
         }
     }
 

@@ -35,11 +35,74 @@
     font-size: 24px;
 }
 
+#broadcast_message_container .broadcast-message-wrapper {
+    flex: 1;
+    padding: 0 10px;
+    position: relative; /* For absolute positioning of pagination controls */
+}
+
 #broadcast_message_container .broadcast-text {
-    flex-grow: 1;
+    width: 100%;
     font-size: 16px;
     font-weight: 500;
     text-align: center;
+    margin-bottom: 8px;
+}
+
+/* Remove the broadcast-pagination container styles since we're not using it anymore */
+
+#broadcast_message_container .pagination-btn {
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    margin: 0 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Position the prev button to the left of the horn icon */
+#broadcast_message_container #prevPage {
+    order: -1; /* Move to the beginning of the flex container */
+}
+
+/* Position the next button to the right of the mark as read button */
+#broadcast_message_container #nextPage {
+    order: 999; /* Move to the end of the flex container */
+}
+
+#broadcast_message_container .pagination-btn:hover:not(.disabled) {
+    background-color: rgba(0, 0, 0, 0.7);
+    transform: scale(1.1);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+#broadcast_message_container .pagination-btn.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+#broadcast_message_container .pagination-info {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0 12px;
+    font-weight: 500;
+}
+
+#broadcast_message_container #currentPage,
+#broadcast_message_container #totalPages {
+    font-weight: 700;
+    color: white;
 }
 
 #broadcast_message_container .broadcast-close {
@@ -53,15 +116,41 @@
     color: #0078d7;
     border: 1px solid #0078d7;
     border-radius: 4px;
-    padding: 5px 10px;
+    padding: 6px 12px;
     font-size: 14px;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.25s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+#broadcast_message_container .mark-as-read-btn:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: all 0.6s ease;
 }
 
 #broadcast_message_container .mark-as-read-btn:hover {
     background-color: #0078d7;
     color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 120, 215, 0.3);
+}
+
+#broadcast_message_container .mark-as-read-btn:hover:before {
+    left: 100%;
+}
+
+#broadcast_message_container .mark-as-read-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 120, 215, 0.2);
 }
 
 #broadcast_message_container .broadcast-close:hover {
