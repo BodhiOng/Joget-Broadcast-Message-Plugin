@@ -1,95 +1,47 @@
-# Description
+# Joget Broadcast Message Plugin
 
-This repo consists of several plugins to demo the new plugin types added in DX 8.2.
+A UI HTML Injector plugin for Joget that displays broadcast messages to users across the platform. This plugin enables users to communicate important announcements to all logged-in users in real-time.
 
-## Web Filter Plugins
-- SampleHeaderFilter
-- SampleWebFilterPlugin
-- SampleLoginFormEncryption
+## Description
 
-## UI HTML Injector Plugins
-- SampleChatUiHtmlInjector
-- SampleLogUrlUiHtmlInjector
-- BroadcastMessagePlugin - A plugin to broadcast messages to all Joget users
+The Broadcast Message Plugin adds a notification banner at the top of Joget pages that displays broadcast messages to users. Messages can be sourced from a CRUD form in a Joget app, allowing for dynamic content management. Any user can broadcast messages to all other connected users, making it a versatile communication tool. The plugin uses WebSocket technology for real-time communication and updates.
 
-## Broadcast Message Plugin
+## Features
 
-The Broadcast Message Plugin allows administrators to broadcast important messages to all users currently logged into the Joget platform. The plugin can source messages either from static configuration or from a CRUD form in a Joget app.
+- **Real-time Message Broadcasting**: Instantly deliver messages to all connected users
+- **Universal Access**: Any authenticated user can broadcast messages to all other users
+- **Message Pagination**: Navigate through multiple messages with previous/next controls
+- **Priority-Based Sorting**: Display higher priority messages first (lower number = higher priority)
+- **"Mark as Read" Functionality**: Users can mark messages as read, which won't appear again in their browser
+- **Persistent Read Status**: Uses localStorage to remember which messages have been read across page refreshes
+- **WebSocket Communication**: Efficient real-time updates without page refreshes
 
-### Features
+## Configuration
 
-- Real-time message broadcasting to all connected users
-- WebSocket-based communication for instant message delivery
-- Option to source messages from a CRUD form in Joget
-- Support for message prioritization and active status filtering
-- Admin-only message broadcasting capability
+The plugin sources messages from a CRUD form with the following default configuration:
 
-### Configuration
+- **App ID**: broadcast_memo_plugin_app
+- **Form ID**: broadcast_messages
+- **Message Field ID**: message_text
+- **Priority Field ID**: priority
 
-The plugin supports the following configuration options:
+## CRUD Form Setup
 
-#### Basic Configuration
-- **Use CRUD for Messages**: Enable to source messages from a CRUD form instead of static text
-- **Broadcast Message**: Static message to display when CRUD is not enabled or no active CRUD message is found
+To use the plugin with a CRUD form:
 
-#### CRUD Integration Configuration
-- **App ID**: ID of the app containing the CRUD form
-- **App Version**: Version of the app (leave blank for latest published version)
-- **Form ID**: ID of the form containing broadcast messages
-- **Message Field ID**: ID of the field containing the message text
-- **Active Status Field ID**: ID of the field indicating if the message is active (optional)
-- **Priority Field ID**: ID of the field indicating message priority (optional)
+1. Create a form in Joget with the following fields:
+   - A text field for the message content (ID: message_text)
+   - A number field for priority (ID: priority) - lower numbers appear first
 
-### CRUD Form Setup
+2. Create records in this form to add broadcast messages
 
-To use a CRUD form as the message source:
+3. Messages will be automatically sorted by priority (lower number = higher priority)
 
-1. Create a form in Joget with at least the following fields:
-   - A text field for the message content
-   - A checkbox or radio field for active status (optional)
-   - A number field for priority (optional)
+## User Experience
 
-2. Configure the plugin with the appropriate App ID, Form ID, and field IDs
-
-3. Set "Use CRUD for Messages" to true
-
-The plugin will automatically fetch the highest priority active message from the form and display it to all users.
-
-## Console Page Plugin
-- SampleConsolePagePlugin
-
-## System Configurable Plugin
-- SampleWebFilterPlugin
-
-## Activation Aware Plugin
-- SampleHeaderFilter
-- SampleWebFilterPlugin
-- SampleLoginFormEncryption
-
-# Getting Help
-
-JogetOSS is a community-led team for open source software related to the [Joget](https://www.joget.org) no-code/low-code application platform.
-Projects under JogetOSS are community-driven and community-supported.
-To obtain support, ask questions, get answers and help others, please participate in the [Community Q&A](https://answers.joget.org/).
-
-# Contributing
-
-This project welcomes contributions and suggestions, please open an issue or create a pull request.
-
-Please note that all interactions fall under our [Code of Conduct](https://github.com/jogetoss/repo-template/blob/main/CODE_OF_CONDUCT.md).
-
-# Licensing
-
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-        http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
-
-NOTE: This software may depend on other packages that may be licensed under different open source licenses.
+- Users see a notification banner at the top of Joget pages
+- Any authenticated user can broadcast messages to all other connected users
+- If multiple messages exist, pagination arrows appear to navigate between them
+- Users can click "Mark as Read" to dismiss a message
+- Read messages won't appear again in the user's browser (stored in localStorage)
+- When all messages are read, the banner disappears until new messages are available

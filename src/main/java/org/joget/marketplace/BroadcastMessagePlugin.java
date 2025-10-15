@@ -30,9 +30,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     private static Set<Session> clients = new CopyOnWriteArraySet<>();
     private static Map<String, List<String>> userClients = new HashMap<>();
     private static String defaultBroadcastMessage = "No memos available as of now";
-    
-    // Pagination settings
-    private static final int DEFAULT_PAGE_SIZE = 5;
 
     @Override
     public String getName() {
@@ -87,19 +84,12 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             FormRowSet allRows = formDataDao.find(formId, null, null, null, null, null, null, null);
             int totalMessages = allRows != null ? allRows.size() : 0;
             
-            LogUtil.info(getClassName(), "Found " + totalMessages + " total messages in form: " + formId);
-            
             if (totalMessages == 0) {
-                LogUtil.info(getClassName(), "No messages found in form: " + formId);
                 return result;
             }
             
-            // Get all messages without sorting to avoid NullPointerException
-            LogUtil.info(getClassName(), "Getting messages without sorting to avoid potential errors");
-            FormRowSet allRowsForPage = formDataDao.find(formId, null, null, null, null, null, null, null);
-            
             // Add all messages to the result
-            for (FormRow row : allRowsForPage) {
+            for (FormRow row : allRows) {
                 Map<String, String> message = new HashMap<>();
                 String id = row.getId();
                 String text = row.getProperty(messageField);
@@ -110,13 +100,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 message.put("priority", priority != null ? priority : "999"); // Default to lowest priority if not set
                 
                 messages.add(message);
-                LogUtil.info(getClassName(), "Added message to result: " + text + " with priority: " + priority);
-            }
-            
-            // Log messages before sorting
-            LogUtil.info(getClassName(), "Messages before sorting:");
-            for (Map<String, String> msg : messages) {
-                LogUtil.info(getClassName(), "- " + msg.get("text"));
             }
             
             // Sort messages by priority (numeric, ascending)
@@ -133,14 +116,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 }
             });
             
-            // Log messages after sorting
-            LogUtil.info(getClassName(), "Messages after sorting by priority:");
-            for (Map<String, String> msg : messages) {
-                LogUtil.info(getClassName(), "- Priority: " + msg.get("priority") + ", Text: " + msg.get("text"));
-            }
-            
-            LogUtil.info(getClassName(), "Returning " + messages.size() + " sorted messages");
-            
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "Error fetching messages from CRUD");
         }
@@ -148,22 +123,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         return result;
     }
     
-    /**
-     * Fetches the first message from the configured CRUD form
-     * For backward compatibility
-     * 
-     * @return The message text or null if no message is found
-     */
-    protected String getMessageFromCrud() {
-        Map<String, Object> result = getMessagesFromCrud();
-        List<Map<String, String>> messages = (List<Map<String, String>>) result.get("messages");
-        
-        if (messages != null && !messages.isEmpty()) {
-            return messages.get(0).get("text");
-        }
-        
-        return null;
-    }
 
     @Override
     public String getHtml(HttpServletRequest request) {
@@ -182,8 +141,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         // Convert messagesData to JSON string
         JSONObject jsonMessagesData = new JSONObject(messagesData);
         String messagesDataJson = jsonMessagesData.toString();
-        LogUtil.info(getClassName(), "Messages data JSON: " + messagesDataJson);
-        LogUtil.info(getClassName(), "Number of messages: " + messageCount);
         
         // Pass data to template
         data.put("messagesData", messagesDataJson);
@@ -202,7 +159,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
     public void addSession(String user, String session) {
         userClients.computeIfAbsent(user, k -> new ArrayList<>()).add(session);
-        LogUtil.info(getClassName(), "All sessions - " + userClients.toString());
     }
 
     public String findUserBySession(String sessionToFind) {
@@ -227,7 +183,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 it.remove();
             }
         }
-        LogUtil.info(getClassName(), "All sessions - " + userClients.toString());
     }
 
     @Override
@@ -236,7 +191,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             String username = WorkflowUtil.getCurrentUsername();
             clients.add(session);
             addSession(username, session.getId());
-            LogUtil.info(getClassName(), "Connection established - " + session.getId() + " - " + username);
 
             // Get all messages
             Map<String, Object> messagesData = getMessagesFromCrud();
@@ -285,11 +239,9 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             // Set pagination data based on the actual number of messages
             int messageCount = messages != null ? messages.size() : 0;
             jsonResponse.put("currentPage", 1); // Always start at page 1
-            jsonResponse.put("pageSize", DEFAULT_PAGE_SIZE);
             jsonResponse.put("totalMessages", messageCount);
             jsonResponse.put("totalPages", messageCount); // Each message is its own page
             
-            LogUtil.info(getClassName(), "Sending WebSocket response with " + messageCount + " messages, totalPages: " + messageCount);
             jsonResponse.put("timestamp", System.currentTimeMillis());
             jsonResponse.put("type", "messages");
             
@@ -308,21 +260,17 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 String messageType = jsonMessage.optString("type", "");
                 
                 if ("broadcast".equals(messageType)) {
-                    // Only admin users can broadcast messages
+                    // Allow any user to broadcast messages
                     String username = WorkflowUtil.getCurrentUsername();
-                    if (WorkflowUtil.isCurrentUserInRole("ROLE_ADMIN")) {
-                        // Broadcast the message to all clients
-                        String broadcastText = jsonMessage.optString("text", "");
-                        broadcastMessage(broadcastText, username, session);
-                    }
+                    // Broadcast the message to all clients
+                    String broadcastText = jsonMessage.optString("text", "");
+                    broadcastMessage(broadcastText, username, session);
                 }
             } catch (Exception jsonEx) {
                 // Legacy support for simple string messages
                 String username = WorkflowUtil.getCurrentUsername();
-                if (WorkflowUtil.isCurrentUserInRole("ROLE_ADMIN")) {
-                    // Broadcast the message to all clients
-                    broadcastMessage(message, username, session);
-                }
+                // Allow any user to broadcast messages
+                broadcastMessage(message, username, session);
             }
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "onMessage Error: " + e.getMessage());
@@ -360,7 +308,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         try {
             String userLeft = findUserBySession(session.getId());
             removeSession(session.getId());
-            LogUtil.info(getClassName(), "WebSocket connection closed - " + session.getId() + " - " + userLeft);
             clients.remove(session);
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "onClose Error");
