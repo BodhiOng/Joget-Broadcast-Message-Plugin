@@ -20,11 +20,19 @@
                 <button class="mark-as-read-btn">Mark as Read</button>
             </div>
 
-            <!-- Left arrow button -->
-            <button class="pagination-btn" id="prevPage" title="Previous Message" style="display: ${(messageCount > 1)?string('flex', 'none')};">&laquo;</button>
-
-            <!-- Right arrow button -->
-            <button class="pagination-btn" id="nextPage" title="Next Message" style="display: ${(messageCount > 1)?string('flex', 'none')};">&raquo;</button>
+            <!-- Pagination buttons side by side with table layout for guaranteed horizontal alignment -->
+            <table style="display: inline-table; margin-left: 5px; border-collapse: collapse; border: none;">
+                <tr>
+                    <td style="padding: 0;">
+                        <!-- Left arrow button -->
+                        <button class="pagination-btn" id="prevPage" title="Previous Message" style="display: ${(messageCount > 1)?string('inline-block', 'none')}; vertical-align: middle;">&laquo;</button>
+                    </td>
+                    <td style="padding: 0;">
+                        <!-- Right arrow button -->
+                        <button class="pagination-btn" id="nextPage" title="Next Message" style="display: ${(messageCount > 1)?string('inline-block', 'none')}; vertical-align: middle;">&raquo;</button>
+                    </td>
+                </tr>
+            </table>
         </div>
     </div>
     

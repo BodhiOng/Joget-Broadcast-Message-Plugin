@@ -25,6 +25,7 @@
 #broadcast_message_container .broadcast-message-content {
     display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 20px;
@@ -59,26 +60,17 @@
     width: 24px;
     height: 24px;
     padding: 0;
-    margin: 0 5px;
+    margin: 0 2px;
     cursor: pointer;
     font-size: 14px;
     font-weight: bold;
     transition: all 0.2s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    text-align: center;
+    line-height: 24px;
+    vertical-align: middle;
 }
 
-/* Position the prev button to the left of the horn icon */
-#broadcast_message_container #prevPage {
-    order: -1; /* Move to the beginning of the flex container */
-}
-
-/* Position the next button to the right of the mark as read button */
-#broadcast_message_container #nextPage {
-    order: 999; /* Move to the end of the flex container */
-}
 
 #broadcast_message_container .pagination-btn:hover:not(.disabled) {
     background-color: rgba(0, 0, 0, 0.7);

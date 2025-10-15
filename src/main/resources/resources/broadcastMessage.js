@@ -103,7 +103,8 @@
                         // Force pagination buttons to be visible if there are multiple messages
                         if (messages.length > 1) {
                             console.log("WebSocket forcing pagination buttons to be visible - " + messages.length + " messages");
-                            container.find('#prevPage, #nextPage').css('display', 'flex');
+                            container.find('#prevPage, #nextPage').css('display', 'inline-block');
+                            container.find('table').css('display', 'inline-table');
                         }
                     }
                 } else if (data.message) {
@@ -187,10 +188,12 @@
             if (totalPages <= 1) {
                 console.log("Hiding pagination buttons - only one message");
                 container.find('#prevPage, #nextPage').hide();
+                container.find('table').hide();
             } else {
                 console.log("Showing pagination buttons - " + totalPages + " messages");
                 // Force display
-                container.find('#prevPage, #nextPage').css('display', 'flex');
+                container.find('#prevPage, #nextPage').css('display', 'inline-block');
+                container.find('table').css('display', 'inline-table');
                 console.log("Pagination buttons visible: prev=" + (container.find('#prevPage').is(':visible')) + ", next=" + (container.find('#nextPage').is(':visible')));
             }
         }
