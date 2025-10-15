@@ -69,6 +69,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             String appId = "broadcast_memo_plugin_app"; // Replace with your actual app ID
             String formId = "broadcast_messages"; // Replace with your actual form ID
             String messageField = "message_text"; // Replace with your message field ID
+            String priorityField = "priority"; // Field for message priority
 
             // Get the AppDefinition
             AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
@@ -102,12 +103,14 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 Map<String, String> message = new HashMap<>();
                 String id = row.getId();
                 String text = row.getProperty(messageField);
+                String priority = row.getProperty(priorityField);
                 
                 message.put("id", id);
                 message.put("text", text != null ? text : "");
+                message.put("priority", priority != null ? priority : "999"); // Default to lowest priority if not set
                 
                 messages.add(message);
-                LogUtil.info(getClassName(), "Added message to result: " + text);
+                LogUtil.info(getClassName(), "Added message to result: " + text + " with priority: " + priority);
             }
             
             // Log messages before sorting
@@ -116,17 +119,24 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 LogUtil.info(getClassName(), "- " + msg.get("text"));
             }
             
-            // Sort messages by text content
+            // Sort messages by priority (numeric, ascending)
             messages.sort((m1, m2) -> {
-                String text1 = m1.get("text");
-                String text2 = m2.get("text");
-                return text1 != null && text2 != null ? text1.compareTo(text2) : 0;
+                try {
+                    int p1 = Integer.parseInt(m1.get("priority"));
+                    int p2 = Integer.parseInt(m2.get("priority"));
+                    return Integer.compare(p1, p2); // Lower number = higher priority
+                } catch (NumberFormatException e) {
+                    // Fall back to text comparison if priority is not a valid number
+                    String text1 = m1.get("text");
+                    String text2 = m2.get("text");
+                    return text1 != null && text2 != null ? text1.compareTo(text2) : 0;
+                }
             });
             
             // Log messages after sorting
-            LogUtil.info(getClassName(), "Messages after sorting by text:");
+            LogUtil.info(getClassName(), "Messages after sorting by priority:");
             for (Map<String, String> msg : messages) {
-                LogUtil.info(getClassName(), "- " + msg.get("text"));
+                LogUtil.info(getClassName(), "- Priority: " + msg.get("priority") + ", Text: " + msg.get("text"));
             }
             
             LogUtil.info(getClassName(), "Returning " + messages.size() + " sorted messages");

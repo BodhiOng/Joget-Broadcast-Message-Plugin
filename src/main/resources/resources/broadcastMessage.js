@@ -201,6 +201,11 @@
         // Function to show a message object
         function showMessage(message) {
             if (message && message.text) {
+                // Get priority info for debugging
+                let priorityInfo = message.priority ? " (Priority: " + message.priority + ")" : "";
+                console.log("Showing message with text: " + message.text + priorityInfo);
+                
+                // Show the message text in the banner
                 showBroadcastBanner(message.text);
             }
         }
