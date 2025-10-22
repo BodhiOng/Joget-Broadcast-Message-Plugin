@@ -3,6 +3,7 @@
     $.fn.broadcastMessage = function (options) {
         var container = $(this);
         var initialMessage = options.initialMessage || "";
+        var initialPriority = options.initialPriority || "low";
         var messagesDataStr = options.messagesData || "{}";
         var messageReadStatus = {};
         var currentPage = 1;
@@ -71,7 +72,8 @@
         } else if (initialMessage && initialMessage.trim() !== "") {
             // Fallback to initial message if no messages data, but only if not already read
             if (!messageReadStatus[initialMessage]) {
-                showBroadcastBanner(initialMessage);
+                // Use the provided initialPriority
+                showBroadcastBanner(initialMessage, initialPriority);
             } else {
                 container.find('.broadcast-message-banner').removeClass('show');
             }
@@ -121,7 +123,8 @@
                     }
                 } else if (data.message) {
                     // Handle single message (legacy support)
-                    showBroadcastBanner(data.message);
+                    // Default to low priority if not specified
+                    showBroadcastBanner(data.message, data.priority || "low");
                 }
             } catch (e) {
                 // Error parsing message
@@ -247,13 +250,13 @@
         // Function to show a message object
         function showMessage(message) {
             if (message && message.text) {
-                // Show the message text in the banner
-                showBroadcastBanner(message.text);
+                // Show the message text in the banner and apply priority-based styling
+                showBroadcastBanner(message.text, message.priority);
             }
         }
         
-        // Function to show broadcast banner
-        function showBroadcastBanner(message) {
+        // Function to show broadcast banner with priority-based styling
+        function showBroadcastBanner(message, priority) {
             // Check if this message has been read before
             if (messageReadStatus[message]) {
                 // User has already read this message - hide the banner
@@ -263,8 +266,23 @@
             
             // Only show if we have an actual message
             if (message && message.trim() !== "") {
+                // Remove all priority classes first
+                container.find('.broadcast-message-banner')
+                    .removeClass('priority-high priority-medium priority-low');
+                
+                // Apply the appropriate priority class
+                if (priority) {
+                    container.find('.broadcast-message-banner').addClass('priority-' + priority.toLowerCase());
+                } else {
+                    // Default to low priority if not specified
+                    container.find('.broadcast-message-banner').addClass('priority-low');
+                }
+                
                 container.find('#broadcastText').text(message);
                 container.find('.broadcast-message-banner').addClass('show');
+                
+                // Log the priority for debugging
+                console.log('Showing message with priority:', priority);
             } else {
                 // No message to show
                 container.find('.broadcast-message-banner').removeClass('show');

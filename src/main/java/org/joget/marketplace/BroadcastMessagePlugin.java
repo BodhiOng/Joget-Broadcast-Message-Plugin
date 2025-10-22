@@ -97,24 +97,28 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 
                 message.put("id", id);
                 message.put("text", text != null ? text : "");
-                message.put("priority", priority != null ? priority : "999"); // Default to lowest priority if not set
+                message.put("priority", priority != null ? priority : "low"); // Default to low priority if not set
                 
                 messages.add(message);
             }
             
-            // Sort messages by priority (numeric, ascending)
+            // Sort messages by priority (high > medium > low)
             messages.sort((m1, m2) -> {
-                try {
-                    int p1 = Integer.parseInt(m1.get("priority"));
-                    int p2 = Integer.parseInt(m2.get("priority"));
-                    return Integer.compare(p1, p2); // Lower number = higher priority
-                } catch (NumberFormatException e) {
-                    // Fall back to text comparison if priority is not a valid number
-                    String text1 = m1.get("text");
-                    String text2 = m2.get("text");
-                    return text1 != null && text2 != null ? text1.compareTo(text2) : 0;
-                }
+                String p1 = m1.get("priority");
+                String p2 = m2.get("priority");
+                
+                // Define priority order: high (1) > medium (2) > low (3)
+                int p1Value = getPriorityValue(p1);
+                int p2Value = getPriorityValue(p2);
+                
+                return Integer.compare(p1Value, p2Value); // Lower number = higher priority
             });
+            
+            // Log the sorted messages for debugging
+            LogUtil.info(getClassName(), "Sorted messages by priority: " + messages.size() + " messages");
+            for (Map<String, String> msg : messages) {
+                LogUtil.info(getClassName(), "Message: " + msg.get("text") + ", Priority: " + msg.get("priority"));
+            }
             
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "Error fetching messages from CRUD");
@@ -146,10 +150,13 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         data.put("messagesData", messagesDataJson);
         data.put("messageCount", messageCount);
         if (messages != null && !messages.isEmpty()) {
-            data.put("message", messages.get(0).get("text"));
+            Map<String, String> firstMessage = messages.get(0);
+            data.put("message", firstMessage.get("text"));
+            data.put("priority", firstMessage.get("priority"));
         } else {
             // Fall back to default message if no messages found
             data.put("message", defaultBroadcastMessage);
+            data.put("priority", "low"); // Default priority
         }
 
         String html = pluginManager.getPluginFreeMarkerTemplate(data, getClassName(),
@@ -206,6 +213,28 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
         } catch (Exception e) {
             LogUtil.error(getClassName(), e, "onOpen Error");
+        }
+    }
+    
+    /**
+     * Helper method to convert text priority to numeric value for sorting
+     * 
+     * @param priority The text priority (high, medium, low)
+     * @return Numeric value (1 for high, 2 for medium, 3 for low)
+     */
+    private int getPriorityValue(String priority) {
+        if (priority == null) {
+            return 3; // Default to lowest priority
+        }
+        
+        switch (priority.toLowerCase()) {
+            case "high":
+                return 1;
+            case "medium":
+                return 2;
+            case "low":
+            default:
+                return 3;
         }
     }
     

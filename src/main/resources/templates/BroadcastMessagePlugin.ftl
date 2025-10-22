@@ -2,7 +2,7 @@
     <link rel="stylesheet" href="${request.contextPath}/plugin/org.joget.marketplace.BroadcastMessagePlugin/broadcastMessage.css">
     <script src="${request.contextPath}/plugin/org.joget.marketplace.BroadcastMessagePlugin/broadcastMessage.js"></script>
 
-    <div class="broadcast-message-banner" id="broadcastBanner">
+    <div class="broadcast-message-banner priority-${priority!"low"}" id="broadcastBanner">
         <div class="broadcast-message-content">
             <!-- Pagination info - hidden but needed for JavaScript -->
             <span class="pagination-info" id="paginationInfo" style="display: none;"><span id="currentPage">1</span>/<span id="totalPages">${messageCount!2}</span></span>
@@ -41,6 +41,7 @@
             $("#broadcast_message_container").broadcastMessage({
                 "contextPath" : "${request.contextPath}",
                 "initialMessage" : "${message!}",
+                "initialPriority" : "${priority!"low"}",
                 "messagesData" : ${messagesData!"{}"}
             });
         });
