@@ -9,12 +9,14 @@ The Broadcast Message Plugin adds a notification banner at the top of Joget page
 ## Features
 
 - **Real-time Message Broadcasting**: Instantly deliver messages to all connected users
+- **Automatic Message Updates**: Periodically checks for new messages and broadcasts them to all connected users without requiring page refresh
 - **Universal Access**: Any authenticated user can broadcast messages to all other users
 - **Message Pagination**: Navigate through multiple messages with previous/next controls
 - **Priority-Based Sorting**: Display higher priority messages first (lower number = higher priority)
 - **"Mark as Read" Functionality**: Users can mark messages as read, which won't appear again in their browser
 - **Persistent Read Status**: Uses localStorage to remember which messages have been read across page refreshes
 - **WebSocket Communication**: Efficient real-time updates without page refreshes
+- **Background Message Checking**: Automatically checks for new messages every 10 seconds
 
 ## Configuration
 

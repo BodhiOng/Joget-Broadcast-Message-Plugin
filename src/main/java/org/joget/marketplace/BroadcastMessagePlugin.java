@@ -7,6 +7,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.websocket.Session;
@@ -30,6 +33,18 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     private static Set<Session> clients = new CopyOnWriteArraySet<>();
     private static Map<String, List<String>> userClients = new HashMap<>();
     private static String defaultBroadcastMessage = "No memos available as of now";
+    
+    // Scheduler for periodic message checking
+    private static ScheduledExecutorService scheduler;
+    
+    // Store the last known message count to detect changes
+    private static int lastMessageCount = 0;
+    
+    // Flag to track if the scheduler is running
+    private static boolean schedulerRunning = false;
+    
+    // Interval in seconds between message checks
+    private static final int CHECK_INTERVAL_SECONDS = 10;
 
     @Override
     public String getName() {
@@ -56,7 +71,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
      * 
      * @return A map containing all the messages
      */
-    protected Map<String, Object> getMessagesFromCrud() {
+    protected static Map<String, Object> getMessagesFromCrud() {
         Map<String, Object> result = new HashMap<>();
         List<Map<String, String>> messages = new ArrayList<>();
         result.put("messages", messages);
@@ -64,7 +79,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         try {
             // Hardcoded CRUD configuration
             String appId = "broadcast_memo_plugin_app"; // Replace with your actual app ID
-            String formId = "broadcast_messages"; // Replace with your actual form ID
+            String formId = "broadcast_messagess"; // Replace with your actual form ID
             String messageField = "message_text"; // Replace with your message field ID
             String priorityField = "priority"; // Field for message priority
 
@@ -73,7 +88,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             AppDefinition appDef = appService.getPublishedAppDefinition(appId);
 
             if (appDef == null) {
-                LogUtil.warn(getClassName(), "App not found: " + appId);
+                LogUtil.warn(BroadcastMessagePlugin.class.getName(), "App not found: " + appId);
                 return result;
             }
 
@@ -115,13 +130,13 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             });
             
             // Log the sorted messages for debugging
-            LogUtil.info(getClassName(), "Sorted messages by priority: " + messages.size() + " messages");
+            LogUtil.info(BroadcastMessagePlugin.class.getName(), "Sorted messages by priority: " + messages.size() + " messages");
             for (Map<String, String> msg : messages) {
-                LogUtil.info(getClassName(), "Message: " + msg.get("text") + ", Priority: " + msg.get("priority"));
+                LogUtil.info(BroadcastMessagePlugin.class.getName(), "Message: " + msg.get("text") + ", Priority: " + msg.get("priority"));
             }
             
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "Error fetching messages from CRUD");
+            LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error fetching messages from CRUD");
         }
         
         return result;
@@ -159,7 +174,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             data.put("priority", "low"); // Default priority
         }
 
-        String html = pluginManager.getPluginFreeMarkerTemplate(data, getClassName(),
+        String html = pluginManager.getPluginFreeMarkerTemplate(data, getClass().getName(),
                 "/templates/BroadcastMessagePlugin.ftl", null);
         return html;
     }
@@ -206,13 +221,21 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             if (messages != null && !messages.isEmpty()) {
                 // Send all messages to the client
                 sendMessagesToClient(messages, messagesData, session);
+                
+                // Update the last message count
+                synchronized (BroadcastMessagePlugin.class) {
+                    lastMessageCount = messages.size();
+                }
+                
+                // Start the scheduler if it's not already running
+                startMessageCheckScheduler();
             } else {
                 // Fall back to default message if no messages found
                 sendMessageToClient(defaultBroadcastMessage, "System", session);
             }
 
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "onOpen Error");
+            LogUtil.error(getClass().getName(), e, "onOpen Error");
         }
     }
     
@@ -222,7 +245,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
      * @param priority The text priority (high, medium, low)
      * @return Numeric value (1 for high, 2 for medium, 3 for low)
      */
-    private int getPriorityValue(String priority) {
+    private static int getPriorityValue(String priority) {
         if (priority == null) {
             return 3; // Default to lowest priority
         }
@@ -245,7 +268,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
      * @param paginationData Pagination metadata
      * @param client The WebSocket session
      */
-    private void sendMessagesToClient(List<Map<String, String>> messages, Map<String, Object> paginationData, Session client) {
+    private static void sendMessagesToClient(List<Map<String, String>> messages, Map<String, Object> paginationData, Session client) {
         try {
             JSONObject jsonResponse = new JSONObject();
             
@@ -276,7 +299,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             
             client.getBasicRemote().sendText(jsonResponse.toString());
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "sendMessagesToClient Error: " + e.getMessage());
+            LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "sendMessagesToClient Error: " + e.getMessage());
         }
     }
 
@@ -302,7 +325,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 broadcastMessage(message, username, session);
             }
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "onMessage Error: " + e.getMessage());
+            LogUtil.error(getClass().getName(), e, "onMessage Error: " + e.getMessage());
         }
     }
 
@@ -315,11 +338,11 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 }
             }
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "broadcastMessage Error");
+            LogUtil.error(getClass().getName(), e, "broadcastMessage Error");
         }
     }
 
-    private void sendMessageToClient(String message, String author, Session client) {
+    private static void sendMessageToClient(String message, String author, Session client) {
         try {
             JSONObject jsonMessage = new JSONObject();
             jsonMessage.put("message", message);
@@ -328,7 +351,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
             client.getBasicRemote().sendText(jsonMessage.toString());
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "sendMessageToClient Error");
+            LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "sendMessageToClient Error");
         }
     }
 
@@ -338,14 +361,22 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             String userLeft = findUserBySession(session.getId());
             removeSession(session.getId());
             clients.remove(session);
+            
+            // If no more clients, stop the scheduler to save resources
+            synchronized (BroadcastMessagePlugin.class) {
+                if (clients.isEmpty() && scheduler != null && !scheduler.isShutdown()) {
+                    LogUtil.info(BroadcastMessagePlugin.class.getName(), "Stopping message check scheduler as no clients are connected");
+                    stopMessageCheckScheduler();
+                }
+            }
         } catch (Exception e) {
-            LogUtil.error(getClassName(), e, "onClose Error");
+            LogUtil.error(getClass().getName(), e, "onClose Error");
         }
     }
 
     @Override
     public void onError(Session session, Throwable throwable) {
-        LogUtil.error(getClassName(), throwable, "");
+        LogUtil.error(getClass().getName(), throwable, "");
     }
 
     @Override
@@ -357,5 +388,97 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         // No configurable properties in this simplified version
         String[] propertyOptions = {};
         return propertyOptions;
+    }
+    
+    /**
+     * Starts the background scheduler that periodically checks for new messages
+     * Public method to allow starting from other classes
+     */
+    public static synchronized void startMessageCheckScheduler() {
+        if (schedulerRunning) {
+            // Scheduler is already running
+            return;
+        }
+        
+        LogUtil.info(BroadcastMessagePlugin.class.getName(), "Starting message check scheduler with interval of " + CHECK_INTERVAL_SECONDS + " seconds");
+        
+        // Create a new scheduler if needed
+        if (scheduler == null || scheduler.isShutdown()) {
+            scheduler = Executors.newSingleThreadScheduledExecutor();
+        }
+        
+        // Schedule the periodic task
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                checkForNewMessages();
+            } catch (Exception e) {
+                // Catch any exceptions to prevent the scheduler from stopping
+                LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error in scheduled message check");
+            }
+        }, CHECK_INTERVAL_SECONDS, CHECK_INTERVAL_SECONDS, TimeUnit.SECONDS);
+        
+        schedulerRunning = true;
+    }
+    
+    /**
+     * Stops the background scheduler
+     * Public method to allow stopping from Activator
+     */
+    public static synchronized void stopMessageCheckScheduler() {
+        if (scheduler != null && !scheduler.isShutdown()) {
+            LogUtil.info(BroadcastMessagePlugin.class.getName(), "Stopping message check scheduler");
+            scheduler.shutdown();
+            try {
+                // Wait for tasks to complete
+                scheduler.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error shutting down scheduler");
+            }
+            schedulerRunning = false;
+        }
+    }
+    
+    /**
+     * Checks for new messages and broadcasts them to all connected clients
+     */
+    private static void checkForNewMessages() {
+        try {
+            // Skip if no clients are connected
+            if (clients.isEmpty()) {
+                return;
+            }
+            
+            LogUtil.debug(BroadcastMessagePlugin.class.getName(), "Checking for new messages...");
+            
+            // Get all messages
+            Map<String, Object> messagesData = getMessagesFromCrud();
+            List<Map<String, String>> messages = (List<Map<String, String>>) messagesData.get("messages");
+            
+            if (messages == null) {
+                return;
+            }
+            
+            int currentMessageCount = messages.size();
+            
+            // Check if there are new messages by comparing the count
+            synchronized (BroadcastMessagePlugin.class) {
+                if (currentMessageCount != lastMessageCount) {
+                    LogUtil.info(BroadcastMessagePlugin.class.getName(), "New messages detected. Previous count: " + lastMessageCount + 
+                                 ", Current count: " + currentMessageCount);
+                    
+                    // Broadcast to all connected clients
+                    for (Session client : clients) {
+                        if (client.isOpen()) {
+                            sendMessagesToClient(messages, messagesData, client);
+                        }
+                    }
+                    
+                    // Update the last message count
+                    lastMessageCount = currentMessageCount;
+                }
+            }
+        } catch (Exception e) {
+            LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error checking for new messages");
+        }
     }
 }
