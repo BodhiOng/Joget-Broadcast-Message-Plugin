@@ -9,7 +9,7 @@
         var currentPage = 1;
         var totalPages = 1;
         var messages = [];
-        
+
         // Parse messagesData from JSON string
         var messagesData = {};
         try {
@@ -21,7 +21,7 @@
         } catch (e) {
             messagesData = {};
         }
-        
+
         // Load previously read messages from localStorage
         const storedStatus = localStorage.getItem('broadcastMessageReadStatus');
         if (storedStatus) {
@@ -31,45 +31,45 @@
                 messageReadStatus = {};
             }
         }
-        
+
         // Store message priorities for tracking changes
         let messagePriorities = {};
-        
+
         // Initialize message data
         if (messagesData && messagesData.messages) {
             // Get all messages
             let allMessages = messagesData.messages || [];
-            
+
             // Store priorities for all messages
             allMessages.forEach(msg => {
                 if (msg.id && msg.priority) {
                     messagePriorities[msg.id] = msg.priority;
                 }
             });
-            
+
             // Filter out already read messages
             messages = allMessages.filter(msg => !messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
-            
+
             totalPages = messages.length;
             currentPage = 1; // Start with the first message
-            
+
             // Display the first message if there are any unread messages
             if (messages.length > 0) {
                 showMessage(messages[0]);
                 updatePaginationDisplay();
-                
+
                 // Force pagination controls to be always visible if there are multiple messages
                 if (messages.length > 1) {
                     // Immediate display
                     container.find('#broadcastPagination').css('display', 'flex !important').show();
-                    
+
                     // Also set with timeout to handle any CSS that might override it
-                    setTimeout(function() {
+                    setTimeout(function () {
                         container.find('#broadcastPagination').attr('style', 'display: flex !important');
                     }, 100);
-                    
+
                     // And another timeout just to be sure
-                    setTimeout(function() {
+                    setTimeout(function () {
                         container.find('#broadcastPagination').attr('style', 'display: flex !important');
                     }, 1000);
                 }
@@ -88,46 +88,61 @@
                 container.find('.broadcast-message-banner').removeClass('show');
             }
         }
-        
+
         // Initialize WebSocket connection
-        const ws = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + 
-                               window.location.host + 
-                               options.contextPath + 
-                               "/web/socket/plugin/org.joget.marketplace.BroadcastMessagePlugin");
-        
-        ws.onopen = function(event) {
+        const ws = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") +
+            window.location.host +
+            options.contextPath +
+            "/web/socket/plugin/org.joget.marketplace.BroadcastMessagePlugin");
+
+        ws.onopen = function (event) {
             // Connection established
         };
-        
-        ws.onmessage = function(event) {
+
+        ws.onmessage = function (event) {
             try {
                 let data = JSON.parse(event.data);
-                
+
                 if (data.type === "messages") {
                     // Handle paginated messages
                     let allMessages = data.messages || [];
                     
+                    // Check if we're currently showing the default message or no message
+                    const currentText = container.find('#broadcastText').text();
+                    const isShowingDefaultMessage = currentText === options.initialMessage || currentText === "";
+                    
+                    // Log the transition for debugging
+                    if (isShowingDefaultMessage && allMessages.length > 0) {
+                        console.log('Transitioning from default/empty message to real messages');
+                        
+                        // Check if any of the new messages have broadcast status
+                        const hasBroadcastMessages = allMessages.some(msg => msg.status === 'broadcast');
+                        if (hasBroadcastMessages) {
+                            console.log('Found messages with broadcast status - will update display');
+                        }
+                    }
+
                     // Check for priority changes in currently displayed message
                     let currentlyDisplayedMessage = null;
                     if (messages.length > 0 && currentPage > 0 && currentPage <= messages.length) {
                         currentlyDisplayedMessage = messages[currentPage - 1];
                     }
-                    
+
                     // Store new priorities and detect changes
                     let newMessagePriorities = {};
                     let priorityChanges = false;
-                    
+
                     allMessages.forEach(msg => {
                         if (msg.id && msg.priority) {
                             newMessagePriorities[msg.id] = msg.priority;
-                            
+
                             // Check if priority has changed
                             if (messagePriorities[msg.id] && messagePriorities[msg.id] !== msg.priority) {
-                                console.log('Priority changed for message ID: ' + msg.id + 
-                                           ', Previous: ' + messagePriorities[msg.id] + 
-                                           ', New: ' + msg.priority);
+                                console.log('Priority changed for message ID: ' + msg.id +
+                                    ', Previous: ' + messagePriorities[msg.id] +
+                                    ', New: ' + msg.priority);
                                 priorityChanges = true;
-                                
+
                                 // If this is the currently displayed message, update its color immediately
                                 if (currentlyDisplayedMessage && currentlyDisplayedMessage.id === msg.id) {
                                     console.log('Updating color for currently displayed message');
@@ -136,23 +151,40 @@
                             }
                         }
                     });
-                    
+
                     // Update the stored priorities
                     messagePriorities = newMessagePriorities;
-                    
+
                     // Filter out already read messages
                     messages = allMessages.filter(msg => !messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
-                    
+
                     // Set the correct total pages based on unread messages length
                     totalPages = messages.length;
                     currentPage = 1;
-                    
+
                     updatePaginationDisplay();
-                    
+
                     // Display the first unread message if there are any
                     if (messages.length > 0) {
-                        showMessage(messages[0]);
-                        
+                        // If we were showing the default message and now we have real messages,
+                        // make sure to replace the default message with the new real message
+                        if (isShowingDefaultMessage) {
+                            console.log('Replacing default message with first real message');
+                            container.find('.broadcast-message-banner').removeClass('show');
+                            setTimeout(() => {
+                                showMessage(messages[0]);
+                                // Force the banner to be visible
+                                container.find('.broadcast-message-banner').addClass('show');
+                            }, 100); // Small delay to ensure visual transition
+                        } else {
+                            showMessage(messages[0]);
+                            // Double-check that the banner is visible
+                            if (!container.find('.broadcast-message-banner').hasClass('show')) {
+                                console.log('Forcing banner visibility');
+                                container.find('.broadcast-message-banner').addClass('show');
+                            }
+                        }
+
                         // Force pagination buttons to be visible if there are multiple messages
                         if (messages.length > 1) {
                             container.find('#prevPage, #nextPage').css('display', 'inline-block');
@@ -173,24 +205,24 @@
                 // Error parsing message
             }
         };
-        
-        ws.onclose = function(event) {
+
+        ws.onclose = function (event) {
             // Connection closed
         };
-        
-        ws.onerror = function(event) {
+
+        ws.onerror = function (event) {
             // WebSocket error
         };
-        
+
         // Mark as Read button functionality
-        container.find('#broadcastClose').on('click', function() {
+        container.find('#broadcastClose').on('click', function () {
             // Get current message ID and text
             const currentMessageIndex = currentPage - 1;
             if (messages.length > 0 && currentMessageIndex >= 0 && currentMessageIndex < messages.length) {
                 const currentMessage = messages[currentMessageIndex];
                 const messageId = currentMessage.id;
                 const messageText = currentMessage.text;
-                
+
                 // Store both ID and text in localStorage
                 if (messageId) {
                     messageReadStatus[messageId] = true;
@@ -198,29 +230,29 @@
                     if (messageText) {
                         messageReadStatus[messageText] = true;
                     }
-                    
+
                     localStorage.setItem('broadcastMessageReadStatus', JSON.stringify(messageReadStatus));
-                    
+
                     // Hide the current message
                     container.find('.broadcast-message-banner').removeClass('show');
-                    
+
                     // Move to the next unread message if available
                     findAndShowNextUnreadMessage();
                 }
             }
         });
-        
+
         // Function to find and show the next unread message
         function findAndShowNextUnreadMessage() {
             // Filter out read messages
             const unreadMessages = messages.filter(msg => !messageReadStatus[msg.id]);
-            
+
             if (unreadMessages.length > 0) {
                 // Update the messages array with only unread messages
                 messages = unreadMessages;
                 totalPages = messages.length;
                 currentPage = 1;
-                
+
                 // Show the first unread message
                 showMessage(messages[0]);
                 updatePaginationDisplay();
@@ -232,24 +264,24 @@
                 container.find('table').hide();
             }
         }
-        
+
         // Pagination controls
-        container.find('#prevPage').on('click', function() {
+        container.find('#prevPage').on('click', function () {
             if (currentPage > 1) {
                 currentPage--;
                 showCurrentMessage();
                 updatePaginationDisplay();
             }
         });
-        
-        container.find('#nextPage').on('click', function() {
+
+        container.find('#nextPage').on('click', function () {
             if (currentPage < totalPages) {
                 currentPage++;
                 showCurrentMessage();
                 updatePaginationDisplay();
             }
         });
-        
+
         // Function to show the current message based on currentPage
         function showCurrentMessage() {
             if (messages.length > 0 && currentPage > 0 && currentPage <= messages.length) {
@@ -257,28 +289,28 @@
                 showMessage(messages[currentPage - 1]);
             }
         }
-        
+
         // Function to update pagination display
         function updatePaginationDisplay() {
             container.find('#currentPage').text(currentPage);
             container.find('#totalPages').text(totalPages);
-            
+
             // Enable/disable pagination buttons
             if (currentPage <= 1) {
                 container.find('#prevPage').prop('disabled', true).addClass('disabled');
             } else {
                 container.find('#prevPage').prop('disabled', false).removeClass('disabled');
             }
-            
+
             if (currentPage >= totalPages) {
                 container.find('#nextPage').prop('disabled', true).addClass('disabled');
             } else {
                 container.find('#nextPage').prop('disabled', false).removeClass('disabled');
             }
-            
+
             // Always update the total pages display
             container.find('#totalPages').text(totalPages);
-            
+
             // Show/hide pagination buttons
             if (totalPages <= 1) {
                 container.find('#prevPage, #nextPage').hide();
@@ -289,7 +321,7 @@
                 container.find('table').css('display', 'inline-table');
             }
         }
-        
+
         // Function to update the priority/color of a message without changing its content
         function updateMessagePriority(messageId, newPriority) {
             // Find the message in the current messages array
@@ -302,7 +334,7 @@
                     break;
                 }
             }
-            
+
             // If this is the currently displayed message, update its color
             if (messageToUpdate && currentPage > 0 && currentPage <= messages.length) {
                 const currentMessageIndex = currentPage - 1;
@@ -310,15 +342,15 @@
                     // Remove all priority classes first
                     container.find('.broadcast-message-banner')
                         .removeClass('priority-high priority-medium priority-low');
-                    
+
                     // Apply the new priority class
                     container.find('.broadcast-message-banner').addClass('priority-' + newPriority.toLowerCase());
-                    
+
                     console.log('Updated banner color to priority:', newPriority);
                 }
             }
         }
-        
+
         // Function to show a message object
         function showMessage(message) {
             if (message && message.text) {
@@ -326,7 +358,7 @@
                 showBroadcastBanner(message.text, message.priority);
             }
         }
-        
+
         // Function to show broadcast banner with priority-based styling
         function showBroadcastBanner(message, priority) {
             // Check if this message has been read before
@@ -335,13 +367,13 @@
                 container.find('.broadcast-message-banner').removeClass('show');
                 return;
             }
-            
+
             // Only show if we have an actual message
             if (message && message.trim() !== "") {
                 // Remove all priority classes first
                 container.find('.broadcast-message-banner')
                     .removeClass('priority-high priority-medium priority-low');
-                
+
                 // Apply the appropriate priority class
                 if (priority) {
                     container.find('.broadcast-message-banner').addClass('priority-' + priority.toLowerCase());
@@ -349,10 +381,10 @@
                     // Default to low priority if not specified
                     container.find('.broadcast-message-banner').addClass('priority-low');
                 }
-                
+
                 container.find('#broadcastText').text(message);
                 container.find('.broadcast-message-banner').addClass('show');
-                
+
                 // Log the priority for debugging
                 console.log('Showing message with priority:', priority);
             } else {

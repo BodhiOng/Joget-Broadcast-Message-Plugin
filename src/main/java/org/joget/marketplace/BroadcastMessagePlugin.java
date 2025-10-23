@@ -50,7 +50,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     private static boolean schedulerRunning = false;
 
     // Interval in seconds between message checks
-    private static final int CHECK_INTERVAL_SECONDS = 3; // Reduced from 10 to 3 seconds for more responsive updates
+    private static final int CHECK_INTERVAL_SECONDS = 2; // Reduced from 10 to 2 seconds for more responsive updates
 
     @Override
     public String getName() {
@@ -228,6 +228,34 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             Map<String, Object> messagesData = getMessagesFromCrud();
             List<Map<String, String>> messages = (List<Map<String, String>>) messagesData.get("messages");
 
+            // Initialize tracking variables regardless of whether there are messages or not
+            synchronized (BroadcastMessagePlugin.class) {
+                if (messages != null) {
+                    lastMessageCount = messages.size();
+                    
+                    // Initialize the lastMessagePriorities and lastMessageStatus maps
+                    for (Map<String, String> message : messages) {
+                        String id = message.get("id");
+                        String priority = message.get("priority");
+                        String status = message.get("status");
+                        
+                        if (id != null) {
+                            if (priority != null) {
+                                lastMessagePriorities.put(id, priority);
+                            }
+                            if (status != null) {
+                                lastMessageStatus.put(id, status);
+                            }
+                        }
+                    }
+                } else {
+                    lastMessageCount = 0;
+                }
+            }
+            
+            // Always start the scheduler when a client connects, even if there are no messages
+            startMessageCheckScheduler();
+            
             if (messages != null && !messages.isEmpty()) {
                 // Filter messages to only include those with status='broadcast' for
                 // broadcasting
@@ -250,33 +278,10 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
                 // Send broadcast messages to the client
                 sendMessagesToClient(broadcastMessages, broadcastMessagesData, session);
-
-                // Update the last message count and priorities
-                synchronized (BroadcastMessagePlugin.class) {
-                    lastMessageCount = messages.size();
-
-                    // Initialize the lastMessagePriorities and lastMessageStatus maps
-                    for (Map<String, String> message : messages) {
-                        String id = message.get("id");
-                        String priority = message.get("priority");
-                        String status = message.get("status");
-
-                        if (id != null) {
-                            if (priority != null) {
-                                lastMessagePriorities.put(id, priority);
-                            }
-                            if (status != null) {
-                                lastMessageStatus.put(id, status);
-                            }
-                        }
-                    }
-                }
-
-                // Start the scheduler if it's not already running
-                startMessageCheckScheduler();
             } else {
                 // Fall back to default message if no messages found
                 sendMessageToClient(defaultBroadcastMessage, "System", session);
+                LogUtil.info(getClass().getName(), "No messages found. Sending default message to client.");
             }
 
         } catch (Exception e) {
@@ -455,12 +460,42 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             scheduler = Executors.newSingleThreadScheduledExecutor();
         }
 
-        // Schedule the periodic task
+        // Schedule multiple rapid checks at the beginning to quickly detect any new messages
+        // First check after 100ms
+        scheduler.schedule(() -> {
+            try {
+                LogUtil.info(BroadcastMessagePlugin.class.getName(), "Running first rapid check (100ms) for messages");
+                checkForNewMessages();
+            } catch (Exception e) {
+                LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error in rapid message check");
+            }
+        }, 100, TimeUnit.MILLISECONDS);
+        
+        // Second check after 500ms
+        scheduler.schedule(() -> {
+            try {
+                LogUtil.info(BroadcastMessagePlugin.class.getName(), "Running second rapid check (500ms) for messages");
+                checkForNewMessages();
+            } catch (Exception e) {
+                LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error in rapid message check");
+            }
+        }, 500, TimeUnit.MILLISECONDS);
+        
+        // Third check after 1 second
+        scheduler.schedule(() -> {
+            try {
+                LogUtil.info(BroadcastMessagePlugin.class.getName(), "Running third rapid check (1s) for messages");
+                checkForNewMessages();
+            } catch (Exception e) {
+                LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error in rapid message check");
+            }
+        }, 1, TimeUnit.SECONDS);
+        
+        // Then schedule the regular periodic task
         scheduler.scheduleAtFixedRate(() -> {
             try {
                 checkForNewMessages();
             } catch (Exception e) {
-                // Catch any exceptions to prevent the scheduler from stopping
                 LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error in scheduled message check");
             }
         }, CHECK_INTERVAL_SECONDS, CHECK_INTERVAL_SECONDS, TimeUnit.SECONDS);
@@ -495,6 +530,9 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             if (clients.isEmpty()) {
                 return;
             }
+            
+            // Special handling for the initial state
+            boolean isInitialState = lastMessageCount == 0;
 
             LogUtil.debug(BroadcastMessagePlugin.class.getName(), "Checking for new messages...");
 
@@ -513,9 +551,17 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 boolean hasChanges = false;
                 boolean hasPriorityChanges = false;
                 boolean hasStatusChanges = false;
-
+                boolean isFirstMessageAdded = false;
+                
                 // Check if the message count has changed
                 if (currentMessageCount != lastMessageCount) {
+                    // Special case: First message was added (lastMessageCount was 0)
+                    if (lastMessageCount == 0 && currentMessageCount > 0) {
+                        isFirstMessageAdded = true;
+                        LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                                "First message added! Previous count: 0, Current count: " + currentMessageCount);
+                    }
+                    
                     LogUtil.info(BroadcastMessagePlugin.class.getName(),
                             "New messages detected. Previous count: " + lastMessageCount +
                                     ", Current count: " + currentMessageCount);
@@ -569,12 +615,14 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                     }
                 }
 
-                // If there are changes, broadcast to all clients
-                if (hasChanges || hasPriorityChanges || hasStatusChanges) {
+                // If there are changes or we're in the initial state, broadcast to all clients
+                if (hasChanges || hasPriorityChanges || hasStatusChanges || isFirstMessageAdded || isInitialState) {
                     LogUtil.info(BroadcastMessagePlugin.class.getName(),
                             "Broadcasting updates to clients. Message count changed: " + hasChanges +
                                     ", Priorities changed: " + hasPriorityChanges +
-                                    ", Status changed: " + hasStatusChanges);
+                                    ", Status changed: " + hasStatusChanges +
+                                    ", First message added: " + isFirstMessageAdded +
+                                    ", Initial state: " + isInitialState);
 
                     // Filter messages to only include those with status='broadcast' for
                     // broadcasting

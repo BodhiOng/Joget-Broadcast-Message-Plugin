@@ -11,7 +11,6 @@ The Broadcast Message Plugin adds a notification banner at the top of Joget page
 - **Real-time Message Broadcasting**: Instantly deliver messages to all connected users
 - **Selective Broadcasting**: Control which messages are broadcast using a status checkbox
 - **Automatic Message Updates**: Periodically checks for new messages and broadcasts them to all connected users without requiring page refresh
-- **Universal Access**: Any authenticated user can broadcast messages to all other users
 - **Message Pagination**: Navigate through multiple messages with previous/next controls
 - **Priority-Based Sorting**: Display higher priority messages first (lower number = higher priority)
 - **"Mark as Read" Functionality**: Users can mark messages as read, which won't appear again in their browser
@@ -40,12 +39,11 @@ To use the plugin with a CRUD form:
 
 2. Create records in this form to add broadcast messages
 
-3. Messages will be automatically sorted by priority (lower number = higher priority)
+3. Messages will be automatically sorted by priority, in descending order it's: high, medium, low.
 
 ## User Experience
 
 - Users see a notification banner at the top of Joget pages
-- Any authenticated user can broadcast messages to all other connected users
 - If multiple messages exist, pagination arrows appear to navigate between them
 - Users can click "Mark as Read" to dismiss a message
 - Read messages won't appear again in the user's browser (stored in localStorage)
