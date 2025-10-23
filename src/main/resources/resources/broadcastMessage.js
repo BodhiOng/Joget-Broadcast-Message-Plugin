@@ -32,10 +32,20 @@
             }
         }
         
+        // Store message priorities for tracking changes
+        let messagePriorities = {};
+        
         // Initialize message data
         if (messagesData && messagesData.messages) {
             // Get all messages
             let allMessages = messagesData.messages || [];
+            
+            // Store priorities for all messages
+            allMessages.forEach(msg => {
+                if (msg.id && msg.priority) {
+                    messagePriorities[msg.id] = msg.priority;
+                }
+            });
             
             // Filter out already read messages
             messages = allMessages.filter(msg => !messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
@@ -96,6 +106,39 @@
                 if (data.type === "messages") {
                     // Handle paginated messages
                     let allMessages = data.messages || [];
+                    
+                    // Check for priority changes in currently displayed message
+                    let currentlyDisplayedMessage = null;
+                    if (messages.length > 0 && currentPage > 0 && currentPage <= messages.length) {
+                        currentlyDisplayedMessage = messages[currentPage - 1];
+                    }
+                    
+                    // Store new priorities and detect changes
+                    let newMessagePriorities = {};
+                    let priorityChanges = false;
+                    
+                    allMessages.forEach(msg => {
+                        if (msg.id && msg.priority) {
+                            newMessagePriorities[msg.id] = msg.priority;
+                            
+                            // Check if priority has changed
+                            if (messagePriorities[msg.id] && messagePriorities[msg.id] !== msg.priority) {
+                                console.log('Priority changed for message ID: ' + msg.id + 
+                                           ', Previous: ' + messagePriorities[msg.id] + 
+                                           ', New: ' + msg.priority);
+                                priorityChanges = true;
+                                
+                                // If this is the currently displayed message, update its color immediately
+                                if (currentlyDisplayedMessage && currentlyDisplayedMessage.id === msg.id) {
+                                    console.log('Updating color for currently displayed message');
+                                    updateMessagePriority(currentlyDisplayedMessage.id, msg.priority);
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Update the stored priorities
+                    messagePriorities = newMessagePriorities;
                     
                     // Filter out already read messages
                     messages = allMessages.filter(msg => !messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
@@ -250,44 +293,55 @@
         // Function to show a message object
         function showMessage(message) {
             if (message && message.text) {
-                // Show the message text in the banner and apply priority-based styling
-                showBroadcastBanner(message.text, message.priority);
-            }
+    
+    // If this is the currently displayed message, update its color
+    if (messageToUpdate && currentPage > 0 && currentPage <= messages.length) {
+        const currentMessageIndex = currentPage - 1;
+        if (messages[currentMessageIndex].id === messageId) {
+            // Remove all priority classes first
+            container.find('.broadcast-message-banner')
+                .removeClass('priority-high priority-medium priority-low');
+            
+            // Apply the new priority class
+            container.find('.broadcast-message-banner').addClass('priority-' + newPriority.toLowerCase());
+            
+            console.log('Updated banner color to priority:', newPriority);
+        }
+    }
+}
+
+// Function to show broadcast banner with priority-based styling
+function showBroadcastBanner(message, priority) {
+    // Check if this message has been read before
+    if (messageReadStatus[message]) {
+        // User has already read this message - hide the banner
+        container.find('.broadcast-message-banner').removeClass('show');
+        return;
+    }
+    
+    // Only show if we have an actual message
+    if (message && message.trim() !== "") {
+        // Remove all priority classes first
+        container.find('.broadcast-message-banner')
+            .removeClass('priority-high priority-medium priority-low');
+        
+        // Apply the appropriate priority class
+        if (priority) {
+            container.find('.broadcast-message-banner').addClass('priority-' + priority.toLowerCase());
+        } else {
+            // Default to low priority if not specified
+            container.find('.broadcast-message-banner').addClass('priority-low');
         }
         
-        // Function to show broadcast banner with priority-based styling
-        function showBroadcastBanner(message, priority) {
-            // Check if this message has been read before
-            if (messageReadStatus[message]) {
-                // User has already read this message - hide the banner
-                container.find('.broadcast-message-banner').removeClass('show');
-                return;
-            }
-            
-            // Only show if we have an actual message
-            if (message && message.trim() !== "") {
-                // Remove all priority classes first
-                container.find('.broadcast-message-banner')
-                    .removeClass('priority-high priority-medium priority-low');
-                
-                // Apply the appropriate priority class
-                if (priority) {
-                    container.find('.broadcast-message-banner').addClass('priority-' + priority.toLowerCase());
-                } else {
-                    // Default to low priority if not specified
-                    container.find('.broadcast-message-banner').addClass('priority-low');
-                }
-                
-                container.find('#broadcastText').text(message);
-                container.find('.broadcast-message-banner').addClass('show');
-                
-                // Log the priority for debugging
-                console.log('Showing message with priority:', priority);
-            } else {
-                // No message to show
-                container.find('.broadcast-message-banner').removeClass('show');
-            }
-        }
-    };
-    
-}(jQuery));
+        container.find('#broadcastText').text(message);
+        container.find('.broadcast-message-banner').addClass('show');
+        
+        // Log the priority for debugging
+        console.log('Showing message with priority:', priority);
+    } else {
+        // No message to show
+        container.find('.broadcast-message-banner').removeClass('show');
+    }
+}
+
+// ... (rest of the code remains the same)

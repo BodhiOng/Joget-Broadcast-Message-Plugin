@@ -40,6 +40,9 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     // Store the last known message count to detect changes
     private static int lastMessageCount = 0;
     
+    // Store the last known message priorities to detect changes
+    private static Map<String, String> lastMessagePriorities = new HashMap<>();
+    
     // Flag to track if the scheduler is running
     private static boolean schedulerRunning = false;
     
@@ -222,9 +225,19 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 // Send all messages to the client
                 sendMessagesToClient(messages, messagesData, session);
                 
-                // Update the last message count
+                // Update the last message count and priorities
                 synchronized (BroadcastMessagePlugin.class) {
                     lastMessageCount = messages.size();
+                    
+                    // Initialize the lastMessagePriorities map
+                    for (Map<String, String> message : messages) {
+                        String id = message.get("id");
+                        String priority = message.get("priority");
+                        
+                        if (id != null && priority != null) {
+                            lastMessagePriorities.put(id, priority);
+                        }
+                    }
                 }
                 
                 // Start the scheduler if it's not already running
@@ -460,11 +473,50 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             
             int currentMessageCount = messages.size();
             
-            // Check if there are new messages by comparing the count
+            // Check for changes in messages or priorities
             synchronized (BroadcastMessagePlugin.class) {
+                boolean hasChanges = false;
+                boolean hasPriorityChanges = false;
+                
+                // Check if the message count has changed
                 if (currentMessageCount != lastMessageCount) {
                     LogUtil.info(BroadcastMessagePlugin.class.getName(), "New messages detected. Previous count: " + lastMessageCount + 
                                  ", Current count: " + currentMessageCount);
+                    hasChanges = true;
+                }
+                
+                // Check if any message priorities have changed
+                Map<String, String> currentPriorities = new HashMap<>();
+                for (Map<String, String> message : messages) {
+                    String id = message.get("id");
+                    String priority = message.get("priority");
+                    
+                    if (id != null && priority != null) {
+                        currentPriorities.put(id, priority);
+                        
+                        // Check if this message's priority has changed
+                        String previousPriority = lastMessagePriorities.get(id);
+                        if (previousPriority != null && !previousPriority.equals(priority)) {
+                            LogUtil.info(BroadcastMessagePlugin.class.getName(), "Priority change detected for message ID: " + id + 
+                                         ", Previous: " + previousPriority + ", Current: " + priority);
+                            hasPriorityChanges = true;
+                        }
+                    }
+                }
+                
+                // Also check if any messages have been removed
+                for (String id : lastMessagePriorities.keySet()) {
+                    if (!currentPriorities.containsKey(id)) {
+                        hasChanges = true;
+                        break;
+                    }
+                }
+                
+                // If there are changes, broadcast to all clients
+                if (hasChanges || hasPriorityChanges) {
+                    LogUtil.info(BroadcastMessagePlugin.class.getName(), 
+                                 "Broadcasting updates to clients. Message count changed: " + hasChanges + 
+                                 ", Priorities changed: " + hasPriorityChanges);
                     
                     // Broadcast to all connected clients
                     for (Session client : clients) {
@@ -473,8 +525,9 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                         }
                     }
                     
-                    // Update the last message count
+                    // Update the tracking variables
                     lastMessageCount = currentMessageCount;
+                    lastMessagePriorities = currentPriorities;
                 }
             }
         } catch (Exception e) {
