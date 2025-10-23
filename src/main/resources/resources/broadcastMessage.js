@@ -155,6 +155,17 @@
                     // Update the stored priorities
                     messagePriorities = newMessagePriorities;
 
+                    // Check if any messages have been deleted
+                    const previousMessageIds = messages.map(msg => msg.id).filter(id => id); // Get non-null IDs
+                    const newMessageIds = allMessages.map(msg => msg.id).filter(id => id); // Get non-null IDs
+                    
+                    // Find deleted message IDs (in previous but not in new)
+                    const deletedMessageIds = previousMessageIds.filter(id => !newMessageIds.includes(id));
+                    
+                    if (deletedMessageIds.length > 0) {
+                        console.log('Detected deleted messages:', deletedMessageIds);
+                    }
+                    
                     // Filter out already read messages
                     messages = allMessages.filter(msg => !messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
 
@@ -164,6 +175,9 @@
 
                     updatePaginationDisplay();
 
+                    // Check if all messages were deleted
+                    const allMessagesDeleted = previousMessageIds.length > 0 && allMessages.length === 0;
+                    
                     // Display the first unread message if there are any
                     if (messages.length > 0) {
                         // If we were showing the default message and now we have real messages,
@@ -191,10 +205,25 @@
                             container.find('table').css('display', 'inline-table');
                         }
                     } else {
-                        // No unread messages - hide everything
+                        // No unread messages or all messages were deleted - hide everything
+                        if (allMessagesDeleted) {
+                            console.log('All messages were deleted - hiding banner');
+                        }
                         container.find('.broadcast-message-banner').removeClass('show');
                         container.find('#prevPage, #nextPage').hide();
                         container.find('table').hide();
+                        
+                        // If all messages were deleted, show the default message
+                        if (allMessagesDeleted && options.initialMessage) {
+                            setTimeout(() => {
+                                // Show the default message
+                                container.find('#broadcastText').text(options.initialMessage);
+                                container.find('.broadcast-message-banner')
+                                    .removeClass('priority-high priority-medium priority-low')
+                                    .addClass('priority-low');
+                                container.find('.broadcast-message-banner').addClass('show');
+                            }, 300); // Small delay to ensure visual transition
+                        }
                     }
                 } else if (data.message) {
                     // Handle single message (legacy support)
