@@ -131,7 +131,7 @@
                                 // If this is the currently displayed message, update its color immediately
                                 if (currentlyDisplayedMessage && currentlyDisplayedMessage.id === msg.id) {
                                     console.log('Updating color for currently displayed message');
-                                    updateMessagePriority(currentlyDisplayedMessage.id, msg.priority);
+                                    updateMessagePriority(msg.id, msg.priority);
                                 }
                             }
                         }
@@ -290,58 +290,76 @@
             }
         }
         
+        // Function to update the priority/color of a message without changing its content
+        function updateMessagePriority(messageId, newPriority) {
+            // Find the message in the current messages array
+            let messageToUpdate = null;
+            for (let i = 0; i < messages.length; i++) {
+                if (messages[i].id === messageId) {
+                    messageToUpdate = messages[i];
+                    // Update the priority in our local array
+                    messages[i].priority = newPriority;
+                    break;
+                }
+            }
+            
+            // If this is the currently displayed message, update its color
+            if (messageToUpdate && currentPage > 0 && currentPage <= messages.length) {
+                const currentMessageIndex = currentPage - 1;
+                if (messages[currentMessageIndex].id === messageId) {
+                    // Remove all priority classes first
+                    container.find('.broadcast-message-banner')
+                        .removeClass('priority-high priority-medium priority-low');
+                    
+                    // Apply the new priority class
+                    container.find('.broadcast-message-banner').addClass('priority-' + newPriority.toLowerCase());
+                    
+                    console.log('Updated banner color to priority:', newPriority);
+                }
+            }
+        }
+        
         // Function to show a message object
         function showMessage(message) {
             if (message && message.text) {
-    
-    // If this is the currently displayed message, update its color
-    if (messageToUpdate && currentPage > 0 && currentPage <= messages.length) {
-        const currentMessageIndex = currentPage - 1;
-        if (messages[currentMessageIndex].id === messageId) {
-            // Remove all priority classes first
-            container.find('.broadcast-message-banner')
-                .removeClass('priority-high priority-medium priority-low');
-            
-            // Apply the new priority class
-            container.find('.broadcast-message-banner').addClass('priority-' + newPriority.toLowerCase());
-            
-            console.log('Updated banner color to priority:', newPriority);
-        }
-    }
-}
-
-// Function to show broadcast banner with priority-based styling
-function showBroadcastBanner(message, priority) {
-    // Check if this message has been read before
-    if (messageReadStatus[message]) {
-        // User has already read this message - hide the banner
-        container.find('.broadcast-message-banner').removeClass('show');
-        return;
-    }
-    
-    // Only show if we have an actual message
-    if (message && message.trim() !== "") {
-        // Remove all priority classes first
-        container.find('.broadcast-message-banner')
-            .removeClass('priority-high priority-medium priority-low');
-        
-        // Apply the appropriate priority class
-        if (priority) {
-            container.find('.broadcast-message-banner').addClass('priority-' + priority.toLowerCase());
-        } else {
-            // Default to low priority if not specified
-            container.find('.broadcast-message-banner').addClass('priority-low');
+                // Show the message text in the banner and apply priority-based styling
+                showBroadcastBanner(message.text, message.priority);
+            }
         }
         
-        container.find('#broadcastText').text(message);
-        container.find('.broadcast-message-banner').addClass('show');
-        
-        // Log the priority for debugging
-        console.log('Showing message with priority:', priority);
-    } else {
-        // No message to show
-        container.find('.broadcast-message-banner').removeClass('show');
-    }
-}
+        // Function to show broadcast banner with priority-based styling
+        function showBroadcastBanner(message, priority) {
+            // Check if this message has been read before
+            if (messageReadStatus[message]) {
+                // User has already read this message - hide the banner
+                container.find('.broadcast-message-banner').removeClass('show');
+                return;
+            }
+            
+            // Only show if we have an actual message
+            if (message && message.trim() !== "") {
+                // Remove all priority classes first
+                container.find('.broadcast-message-banner')
+                    .removeClass('priority-high priority-medium priority-low');
+                
+                // Apply the appropriate priority class
+                if (priority) {
+                    container.find('.broadcast-message-banner').addClass('priority-' + priority.toLowerCase());
+                } else {
+                    // Default to low priority if not specified
+                    container.find('.broadcast-message-banner').addClass('priority-low');
+                }
+                
+                container.find('#broadcastText').text(message);
+                container.find('.broadcast-message-banner').addClass('show');
+                
+                // Log the priority for debugging
+                console.log('Showing message with priority:', priority);
+            } else {
+                // No message to show
+                container.find('.broadcast-message-banner').removeClass('show');
+            }
+        }
+    };
 
-// ... (rest of the code remains the same)
+}(jQuery));

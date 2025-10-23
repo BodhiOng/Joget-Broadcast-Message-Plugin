@@ -33,19 +33,19 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     private static Set<Session> clients = new CopyOnWriteArraySet<>();
     private static Map<String, List<String>> userClients = new HashMap<>();
     private static String defaultBroadcastMessage = "No memos available as of now";
-    
+
     // Scheduler for periodic message checking
     private static ScheduledExecutorService scheduler;
-    
+
     // Store the last known message count to detect changes
     private static int lastMessageCount = 0;
-    
+
     // Store the last known message priorities to detect changes
     private static Map<String, String> lastMessagePriorities = new HashMap<>();
-    
+
     // Flag to track if the scheduler is running
     private static boolean schedulerRunning = false;
-    
+
     // Interval in seconds between message checks
     private static final int CHECK_INTERVAL_SECONDS = 10;
 
@@ -78,13 +78,14 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         Map<String, Object> result = new HashMap<>();
         List<Map<String, String>> messages = new ArrayList<>();
         result.put("messages", messages);
-        
+
         try {
             // Hardcoded CRUD configuration
             String appId = "broadcast_memo_plugin_app"; // Replace with your actual app ID
             String formId = "broadcast_messagess"; // Replace with your actual form ID
             String messageField = "message_text"; // Replace with your message field ID
             String priorityField = "priority"; // Field for message priority
+            String statusField = "status"; // Field for broadcast status (checked = broadcast, unchecked = save only)
 
             // Get the AppDefinition
             AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
@@ -97,54 +98,57 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
             // Get form data
             FormDataDao formDataDao = (FormDataDao) AppUtil.getApplicationContext().getBean("formDataDao");
-            
+
             // Get all messages
             FormRowSet allRows = formDataDao.find(formId, null, null, null, null, null, null, null);
             int totalMessages = allRows != null ? allRows.size() : 0;
-            
+
             if (totalMessages == 0) {
                 return result;
             }
-            
+
             // Add all messages to the result
             for (FormRow row : allRows) {
                 Map<String, String> message = new HashMap<>();
                 String id = row.getId();
                 String text = row.getProperty(messageField);
                 String priority = row.getProperty(priorityField);
-                
+                String status = row.getProperty(statusField);
+
                 message.put("id", id);
                 message.put("text", text != null ? text : "");
                 message.put("priority", priority != null ? priority : "low"); // Default to low priority if not set
-                
+                message.put("status", status); // Store the status value as is
+
                 messages.add(message);
             }
-            
+
             // Sort messages by priority (high > medium > low)
             messages.sort((m1, m2) -> {
                 String p1 = m1.get("priority");
                 String p2 = m2.get("priority");
-                
+
                 // Define priority order: high (1) > medium (2) > low (3)
                 int p1Value = getPriorityValue(p1);
                 int p2Value = getPriorityValue(p2);
-                
+
                 return Integer.compare(p1Value, p2Value); // Lower number = higher priority
             });
-            
+
             // Log the sorted messages for debugging
-            LogUtil.info(BroadcastMessagePlugin.class.getName(), "Sorted messages by priority: " + messages.size() + " messages");
+            LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                    "Sorted messages by priority: " + messages.size() + " messages");
             for (Map<String, String> msg : messages) {
-                LogUtil.info(BroadcastMessagePlugin.class.getName(), "Message: " + msg.get("text") + ", Priority: " + msg.get("priority"));
+                LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                        "Message: " + msg.get("text") + ", Priority: " + msg.get("priority"));
             }
-            
+
         } catch (Exception e) {
             LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error fetching messages from CRUD");
         }
-        
+
         return result;
     }
-    
 
     @Override
     public String getHtml(HttpServletRequest request) {
@@ -152,18 +156,18 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         Map data = new HashMap();
         data.put("plugin", this);
         data.put("request", request);
-        
+
         // Get all messages
         Map<String, Object> messagesData = getMessagesFromCrud();
-        
+
         // For backward compatibility
         List<Map<String, String>> messages = (List<Map<String, String>>) messagesData.get("messages");
         int messageCount = messages != null ? messages.size() : 0;
-        
+
         // Convert messagesData to JSON string
         JSONObject jsonMessagesData = new JSONObject(messagesData);
         String messagesDataJson = jsonMessagesData.toString();
-        
+
         // Pass data to template
         data.put("messagesData", messagesDataJson);
         data.put("messageCount", messageCount);
@@ -220,26 +224,45 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             // Get all messages
             Map<String, Object> messagesData = getMessagesFromCrud();
             List<Map<String, String>> messages = (List<Map<String, String>>) messagesData.get("messages");
-            
+
             if (messages != null && !messages.isEmpty()) {
-                // Send all messages to the client
-                sendMessagesToClient(messages, messagesData, session);
-                
+                // Filter messages to only include those with status='broadcast' for
+                // broadcasting
+                List<Map<String, String>> broadcastMessages = new ArrayList<>();
+                for (Map<String, String> message : messages) {
+                    String statusValue = message.get("status");
+                    if ("broadcast".equalsIgnoreCase(statusValue)) {
+                        broadcastMessages.add(message);
+                    }
+                }
+
+                // Create a new messagesData object with only the broadcast messages
+                Map<String, Object> broadcastMessagesData = new HashMap<>();
+                broadcastMessagesData.put("messages", broadcastMessages);
+
+                // Log the number of messages being broadcast
+                LogUtil.info(getClass().getName(),
+                        "Sending " + broadcastMessages.size() + " out of " + messages.size()
+                                + " messages to new client");
+
+                // Send broadcast messages to the client
+                sendMessagesToClient(broadcastMessages, broadcastMessagesData, session);
+
                 // Update the last message count and priorities
                 synchronized (BroadcastMessagePlugin.class) {
                     lastMessageCount = messages.size();
-                    
+
                     // Initialize the lastMessagePriorities map
                     for (Map<String, String> message : messages) {
                         String id = message.get("id");
                         String priority = message.get("priority");
-                        
+
                         if (id != null && priority != null) {
                             lastMessagePriorities.put(id, priority);
                         }
                     }
                 }
-                
+
                 // Start the scheduler if it's not already running
                 startMessageCheckScheduler();
             } else {
@@ -251,7 +274,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             LogUtil.error(getClass().getName(), e, "onOpen Error");
         }
     }
-    
+
     /**
      * Helper method to convert text priority to numeric value for sorting
      * 
@@ -262,7 +285,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         if (priority == null) {
             return 3; // Default to lowest priority
         }
-        
+
         switch (priority.toLowerCase()) {
             case "high":
                 return 1;
@@ -273,18 +296,19 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 return 3;
         }
     }
-    
+
     /**
      * Sends multiple messages to a client with pagination metadata
      * 
-     * @param messages List of message maps
+     * @param messages       List of message maps
      * @param paginationData Pagination metadata
-     * @param client The WebSocket session
+     * @param client         The WebSocket session
      */
-    private static void sendMessagesToClient(List<Map<String, String>> messages, Map<String, Object> paginationData, Session client) {
+    private static void sendMessagesToClient(List<Map<String, String>> messages, Map<String, Object> paginationData,
+            Session client) {
         try {
             JSONObject jsonResponse = new JSONObject();
-            
+
             // Handle messages array safely
             if (messages != null) {
                 // Convert each message to a JSONObject to ensure proper serialization
@@ -300,16 +324,16 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             } else {
                 jsonResponse.put("messages", new JSONArray());
             }
-            
+
             // Set pagination data based on the actual number of messages
             int messageCount = messages != null ? messages.size() : 0;
             jsonResponse.put("currentPage", 1); // Always start at page 1
             jsonResponse.put("totalMessages", messageCount);
             jsonResponse.put("totalPages", messageCount); // Each message is its own page
-            
+
             jsonResponse.put("timestamp", System.currentTimeMillis());
             jsonResponse.put("type", "messages");
-            
+
             client.getBasicRemote().sendText(jsonResponse.toString());
         } catch (Exception e) {
             LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "sendMessagesToClient Error: " + e.getMessage());
@@ -323,7 +347,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             try {
                 JSONObject jsonMessage = new JSONObject(message);
                 String messageType = jsonMessage.optString("type", "");
-                
+
                 if ("broadcast".equals(messageType)) {
                     // Allow any user to broadcast messages
                     String username = WorkflowUtil.getCurrentUsername();
@@ -374,11 +398,12 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             String userLeft = findUserBySession(session.getId());
             removeSession(session.getId());
             clients.remove(session);
-            
+
             // If no more clients, stop the scheduler to save resources
             synchronized (BroadcastMessagePlugin.class) {
                 if (clients.isEmpty() && scheduler != null && !scheduler.isShutdown()) {
-                    LogUtil.info(BroadcastMessagePlugin.class.getName(), "Stopping message check scheduler as no clients are connected");
+                    LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                            "Stopping message check scheduler as no clients are connected");
                     stopMessageCheckScheduler();
                 }
             }
@@ -402,7 +427,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         String[] propertyOptions = {};
         return propertyOptions;
     }
-    
+
     /**
      * Starts the background scheduler that periodically checks for new messages
      * Public method to allow starting from other classes
@@ -412,14 +437,15 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             // Scheduler is already running
             return;
         }
-        
-        LogUtil.info(BroadcastMessagePlugin.class.getName(), "Starting message check scheduler with interval of " + CHECK_INTERVAL_SECONDS + " seconds");
-        
+
+        LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                "Starting message check scheduler with interval of " + CHECK_INTERVAL_SECONDS + " seconds");
+
         // Create a new scheduler if needed
         if (scheduler == null || scheduler.isShutdown()) {
             scheduler = Executors.newSingleThreadScheduledExecutor();
         }
-        
+
         // Schedule the periodic task
         scheduler.scheduleAtFixedRate(() -> {
             try {
@@ -429,10 +455,10 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error in scheduled message check");
             }
         }, CHECK_INTERVAL_SECONDS, CHECK_INTERVAL_SECONDS, TimeUnit.SECONDS);
-        
+
         schedulerRunning = true;
     }
-    
+
     /**
      * Stops the background scheduler
      * Public method to allow stopping from Activator
@@ -450,7 +476,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             schedulerRunning = false;
         }
     }
-    
+
     /**
      * Checks for new messages and broadcasts them to all connected clients
      */
@@ -460,50 +486,52 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             if (clients.isEmpty()) {
                 return;
             }
-            
+
             LogUtil.debug(BroadcastMessagePlugin.class.getName(), "Checking for new messages...");
-            
+
             // Get all messages
             Map<String, Object> messagesData = getMessagesFromCrud();
             List<Map<String, String>> messages = (List<Map<String, String>>) messagesData.get("messages");
-            
+
             if (messages == null) {
                 return;
             }
-            
+
             int currentMessageCount = messages.size();
-            
+
             // Check for changes in messages or priorities
             synchronized (BroadcastMessagePlugin.class) {
                 boolean hasChanges = false;
                 boolean hasPriorityChanges = false;
-                
+
                 // Check if the message count has changed
                 if (currentMessageCount != lastMessageCount) {
-                    LogUtil.info(BroadcastMessagePlugin.class.getName(), "New messages detected. Previous count: " + lastMessageCount + 
-                                 ", Current count: " + currentMessageCount);
+                    LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                            "New messages detected. Previous count: " + lastMessageCount +
+                                    ", Current count: " + currentMessageCount);
                     hasChanges = true;
                 }
-                
+
                 // Check if any message priorities have changed
                 Map<String, String> currentPriorities = new HashMap<>();
                 for (Map<String, String> message : messages) {
                     String id = message.get("id");
                     String priority = message.get("priority");
-                    
+
                     if (id != null && priority != null) {
                         currentPriorities.put(id, priority);
-                        
+
                         // Check if this message's priority has changed
                         String previousPriority = lastMessagePriorities.get(id);
                         if (previousPriority != null && !previousPriority.equals(priority)) {
-                            LogUtil.info(BroadcastMessagePlugin.class.getName(), "Priority change detected for message ID: " + id + 
-                                         ", Previous: " + previousPriority + ", Current: " + priority);
+                            LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                                    "Priority change detected for message ID: " + id +
+                                            ", Previous: " + previousPriority + ", Current: " + priority);
                             hasPriorityChanges = true;
                         }
                     }
                 }
-                
+
                 // Also check if any messages have been removed
                 for (String id : lastMessagePriorities.keySet()) {
                     if (!currentPriorities.containsKey(id)) {
@@ -511,20 +539,38 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                         break;
                     }
                 }
-                
+
                 // If there are changes, broadcast to all clients
                 if (hasChanges || hasPriorityChanges) {
-                    LogUtil.info(BroadcastMessagePlugin.class.getName(), 
-                                 "Broadcasting updates to clients. Message count changed: " + hasChanges + 
-                                 ", Priorities changed: " + hasPriorityChanges);
-                    
+                    LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                            "Broadcasting updates to clients. Message count changed: " + hasChanges +
+                                    ", Priorities changed: " + hasPriorityChanges);
+
+                    // Filter messages to only include those with status='broadcast' for
+                    // broadcasting
+                    List<Map<String, String>> broadcastMessages = new ArrayList<>();
+                    for (Map<String, String> message : messages) {
+                        String statusValue = message.get("status");
+                        if ("broadcast".equalsIgnoreCase(statusValue)) {
+                            broadcastMessages.add(message);
+                        }
+                    }
+
+                    // Create a new messagesData object with only the broadcast messages
+                    Map<String, Object> broadcastMessagesData = new HashMap<>();
+                    broadcastMessagesData.put("messages", broadcastMessages);
+
+                    // Log the number of messages being broadcast
+                    LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                            "Broadcasting " + broadcastMessages.size() + " out of " + messages.size() + " messages");
+
                     // Broadcast to all connected clients
                     for (Session client : clients) {
                         if (client.isOpen()) {
-                            sendMessagesToClient(messages, messagesData, client);
+                            sendMessagesToClient(broadcastMessages, broadcastMessagesData, client);
                         }
                     }
-                    
+
                     // Update the tracking variables
                     lastMessageCount = currentMessageCount;
                     lastMessagePriorities = currentPriorities;

@@ -9,6 +9,7 @@ The Broadcast Message Plugin adds a notification banner at the top of Joget page
 ## Features
 
 - **Real-time Message Broadcasting**: Instantly deliver messages to all connected users
+- **Selective Broadcasting**: Control which messages are broadcast using a status checkbox
 - **Automatic Message Updates**: Periodically checks for new messages and broadcasts them to all connected users without requiring page refresh
 - **Universal Access**: Any authenticated user can broadcast messages to all other users
 - **Message Pagination**: Navigate through multiple messages with previous/next controls
@@ -26,6 +27,7 @@ The plugin sources messages from a CRUD form with the following default configur
 - **Form ID**: broadcast_messages
 - **Message Field ID**: message_text
 - **Priority Field ID**: priority
+- **Status Field ID**: status
 
 ## CRUD Form Setup
 
@@ -34,6 +36,7 @@ To use the plugin with a CRUD form:
 1. Create a form in Joget with the following fields:
    - A text field for the message content (ID: message_text)
    - A number field for priority (ID: priority) - lower numbers appear first
+   - A select box field for status (ID: status) - when set to "broadcast", the message is broadcast to all users; when empty or any other value, the message is saved but not broadcast
 
 2. Create records in this form to add broadcast messages
 
