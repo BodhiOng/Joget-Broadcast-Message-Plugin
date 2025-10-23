@@ -42,12 +42,15 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
     // Store the last known message priorities to detect changes
     private static Map<String, String> lastMessagePriorities = new HashMap<>();
+    
+    // Store the last known message status to detect changes
+    private static Map<String, String> lastMessageStatus = new HashMap<>();
 
     // Flag to track if the scheduler is running
     private static boolean schedulerRunning = false;
 
     // Interval in seconds between message checks
-    private static final int CHECK_INTERVAL_SECONDS = 10;
+    private static final int CHECK_INTERVAL_SECONDS = 3; // Reduced from 10 to 3 seconds for more responsive updates
 
     @Override
     public String getName() {
@@ -252,13 +255,19 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 synchronized (BroadcastMessagePlugin.class) {
                     lastMessageCount = messages.size();
 
-                    // Initialize the lastMessagePriorities map
+                    // Initialize the lastMessagePriorities and lastMessageStatus maps
                     for (Map<String, String> message : messages) {
                         String id = message.get("id");
                         String priority = message.get("priority");
+                        String status = message.get("status");
 
-                        if (id != null && priority != null) {
-                            lastMessagePriorities.put(id, priority);
+                        if (id != null) {
+                            if (priority != null) {
+                                lastMessagePriorities.put(id, priority);
+                            }
+                            if (status != null) {
+                                lastMessageStatus.put(id, status);
+                            }
                         }
                     }
                 }
@@ -503,6 +512,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             synchronized (BroadcastMessagePlugin.class) {
                 boolean hasChanges = false;
                 boolean hasPriorityChanges = false;
+                boolean hasStatusChanges = false;
 
                 // Check if the message count has changed
                 if (currentMessageCount != lastMessageCount) {
@@ -512,22 +522,41 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                     hasChanges = true;
                 }
 
-                // Check if any message priorities have changed
+                // Check if any message priorities or status have changed
                 Map<String, String> currentPriorities = new HashMap<>();
+                Map<String, String> currentStatus = new HashMap<>();
                 for (Map<String, String> message : messages) {
                     String id = message.get("id");
                     String priority = message.get("priority");
+                    String status = message.get("status");
 
-                    if (id != null && priority != null) {
-                        currentPriorities.put(id, priority);
+                    if (id != null) {
+                        // Track priority changes
+                        if (priority != null) {
+                            currentPriorities.put(id, priority);
 
-                        // Check if this message's priority has changed
-                        String previousPriority = lastMessagePriorities.get(id);
-                        if (previousPriority != null && !previousPriority.equals(priority)) {
-                            LogUtil.info(BroadcastMessagePlugin.class.getName(),
-                                    "Priority change detected for message ID: " + id +
-                                            ", Previous: " + previousPriority + ", Current: " + priority);
-                            hasPriorityChanges = true;
+                            // Check if this message's priority has changed
+                            String previousPriority = lastMessagePriorities.get(id);
+                            if (previousPriority != null && !previousPriority.equals(priority)) {
+                                LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                                        "Priority change detected for message ID: " + id +
+                                                ", Previous: " + previousPriority + ", Current: " + priority);
+                                hasPriorityChanges = true;
+                            }
+                        }
+                        
+                        // Track status changes
+                        if (status != null) {
+                            currentStatus.put(id, status);
+                            
+                            // Check if this message's status has changed
+                            String previousStatus = lastMessageStatus.get(id);
+                            if (previousStatus != null && !previousStatus.equals(status)) {
+                                LogUtil.info(BroadcastMessagePlugin.class.getName(),
+                                        "Status change detected for message ID: " + id +
+                                                ", Previous: " + previousStatus + ", Current: " + status);
+                                hasStatusChanges = true;
+                            }
                         }
                     }
                 }
@@ -541,10 +570,11 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 }
 
                 // If there are changes, broadcast to all clients
-                if (hasChanges || hasPriorityChanges) {
+                if (hasChanges || hasPriorityChanges || hasStatusChanges) {
                     LogUtil.info(BroadcastMessagePlugin.class.getName(),
                             "Broadcasting updates to clients. Message count changed: " + hasChanges +
-                                    ", Priorities changed: " + hasPriorityChanges);
+                                    ", Priorities changed: " + hasPriorityChanges +
+                                    ", Status changed: " + hasStatusChanges);
 
                     // Filter messages to only include those with status='broadcast' for
                     // broadcasting
@@ -574,6 +604,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                     // Update the tracking variables
                     lastMessageCount = currentMessageCount;
                     lastMessagePriorities = currentPriorities;
+                    lastMessageStatus = currentStatus;
                 }
             }
         } catch (Exception e) {
