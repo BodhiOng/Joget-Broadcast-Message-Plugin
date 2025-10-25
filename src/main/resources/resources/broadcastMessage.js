@@ -10,6 +10,45 @@
         var totalPages = 1;
         var messages = [];
 
+        // Create multiple sound options to increase compatibility
+        var soundOptions = {
+            // Option 1: Base64 encoded MP3 (short "ding" sound)
+            mp3Base64: "//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAFAAAGhgBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVXp6enp6enp6enp6enp6enp6enp6enp6en///////////////////8AAAA8TEFNRTMuOTlyAc0AAAAAAAAAABSAJAJAQgAAgAAAA+blzEgdAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQxAADwAABpAAAACAAADSAAAAETEFNRTMuOTkuNVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=",
+
+            // Option 2: Web Audio API beep (more compatible with some browsers)
+            createBeep: function () {
+                try {
+                    var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    var oscillator = audioContext.createOscillator();
+                    var gainNode = audioContext.createGain();
+
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = 800; // Hz
+                    gainNode.gain.value = 0.5;
+
+                    oscillator.start(0);
+                    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.5);
+                    setTimeout(function () {
+                        oscillator.stop();
+                    }, 500);
+
+                    return true;
+                } catch (e) {
+                    // Web Audio API not supported
+                    return false;
+                }
+            }
+        };
+
+        // Create the Audio object for the MP3 option
+        var notificationSound = new Audio("data:audio/mp3;base64," + soundOptions.mp3Base64);
+
+        // Pre-load the sound
+        notificationSound.load();
+
         // Parse messagesData from JSON string
         var messagesData = {};
         try {
@@ -89,6 +128,87 @@
             }
         }
 
+        // Add global test functions to manually trigger different sound options
+        window.testBroadcastSound = function () {
+            playNotificationSound();
+            return 'Sound test initiated.';
+        };
+
+        window.testBroadcastBeep = function () {
+            // Testing Web Audio API beep
+            try {
+                var result = soundOptions.createBeep();
+                return 'Web Audio beep test: ' + (result ? 'SUCCESS' : 'FAILED');
+            } catch (e) {
+                // Web Audio API error
+                return 'Web Audio beep test FAILED: ' + e.message;
+            }
+        };
+
+        window.testBroadcastMP3 = function () {
+            // Testing HTML5 Audio
+            try {
+                notificationSound.pause();
+                notificationSound.currentTime = 0;
+                var playPromise = notificationSound.play();
+
+                if (playPromise !== undefined) {
+                    playPromise.then(function () {
+                        // HTML5 Audio played successfully
+                    }).catch(function (e) {
+                        // HTML5 Audio failed
+                        showSoundNotification();
+                    });
+                }
+                return 'HTML5 Audio test initiated. Check console for results.';
+            } catch (e) {
+                // HTML5 Audio error
+                return 'HTML5 Audio test FAILED: ' + e.message;
+            }
+        };
+
+        window.testNotification = function () {
+            // Testing visual notification
+            showSoundNotification();
+            return 'Visual notification test initiated.';
+        };
+
+
+        // Debug function to show the last WebSocket message
+        window.showLastWebSocketMessage = function () {
+            if (window.lastWebSocketMessage) {
+                // Last WebSocket message stored
+                return 'Last WebSocket message logged to console';
+            } else {
+                return 'No WebSocket messages received yet';
+            }
+        };
+
+        // Function to simulate a broadcast message from the server
+        window.simulateBroadcast = function () {
+            // Simulating a broadcast message
+            var fakeData = {
+                type: 'messages',
+                messages: [{ id: 'test-' + Date.now(), text: 'Test message', status: 'broadcast' }],
+                newBroadcast: true,
+                forceSound: true,
+                timestamp: Date.now()
+            };
+
+            // Store as last message
+            window.lastWebSocketMessage = fakeData;
+
+            // Trigger the sound directly
+            soundOptions.createBeep();
+
+            // Also try the regular sound method
+            setTimeout(function () {
+                playNotificationSound();
+            }, 100);
+
+            return 'Broadcast simulation complete. Check console for details.';
+        };
+
         // Initialize WebSocket connection
         const ws = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") +
             window.location.host +
@@ -99,22 +219,64 @@
             // Connection established
         };
 
+        // Store initial message IDs for comparison
+        var initialMessageIds = [];
+        var isFirstMessageLoad = true;
+
         ws.onmessage = function (event) {
             try {
                 let data = JSON.parse(event.data);
 
+                // Store the message for debugging
+                window.lastWebSocketMessage = data;
+
                 if (data.type === "messages") {
                     // Handle paginated messages
                     let allMessages = data.messages || [];
-                    
+
+                    // Process received messages
+                    if (allMessages.length > 0) {
+
+                        // Always play sound and show notification when receiving messages with broadcast status
+                        const hasBroadcastMessages = allMessages.some(msg => msg.status === 'broadcast');
+                        if (hasBroadcastMessages) {
+                            // Broadcast messages detected, playing sound
+
+                            // Get the first broadcast message text
+                            const broadcastMessage = allMessages.find(msg => msg.status === 'broadcast');
+                            const messageText = broadcastMessage ? broadcastMessage.text : 'New broadcast message received';
+
+                            // Use Web Audio API directly since we know it works
+                            soundOptions.createBeep();
+
+                            // Force a beep again after a short delay as an extra measure
+                            setTimeout(function () {
+                                // Forcing another beep as backup
+                                soundOptions.createBeep();
+                            }, 500);
+                        }
+                    }
+
+                    // Also check for explicit flags from the server
+                    if ((data.newBroadcast === true || data.forceSound === true || data.checkBroadcast === true) && enableSound) {
+                        // Broadcast flag detected, playing sound
+                        // Use Web Audio API directly since we know it works
+                        soundOptions.createBeep();
+
+                        // Also try the regular sound method as backup
+                        setTimeout(function () {
+                            playNotificationSound();
+                        }, 100);
+                    }
+
                     // Check if we're currently showing the default message or no message
                     const currentText = container.find('#broadcastText').text();
                     const isShowingDefaultMessage = currentText === options.initialMessage || currentText === "";
-                    
+
                     // Log the transition for debugging
                     if (isShowingDefaultMessage && allMessages.length > 0) {
                         console.log('Transitioning from default/empty message to real messages');
-                        
+
                         // Check if any of the new messages have broadcast status
                         const hasBroadcastMessages = allMessages.some(msg => msg.status === 'broadcast');
                         if (hasBroadcastMessages) {
@@ -158,14 +320,42 @@
                     // Check if any messages have been deleted
                     const previousMessageIds = messages.map(msg => msg.id).filter(id => id); // Get non-null IDs
                     const newMessageIds = allMessages.map(msg => msg.id).filter(id => id); // Get non-null IDs
-                    
+
                     // Find deleted message IDs (in previous but not in new)
                     const deletedMessageIds = previousMessageIds.filter(id => !newMessageIds.includes(id));
-                    
+
                     if (deletedMessageIds.length > 0) {
                         console.log('Detected deleted messages:', deletedMessageIds);
                     }
-                    
+
+                    // Special handling for first load vs. subsequent updates
+                    if (isFirstMessageLoad) {
+                        // On first load, just store the IDs without playing sound
+                        initialMessageIds = newMessageIds.slice();
+                        isFirstMessageLoad = false;
+                        console.log('Initial message IDs stored:', initialMessageIds);
+                    } else {
+                        // On subsequent loads, check for new messages
+                        const newMessages = newMessageIds.filter(id => !initialMessageIds.includes(id));
+
+                        // Also check for new broadcast messages (status changed to broadcast)
+                        const newBroadcastMessages = allMessages.filter(msg => {
+                            // Check if this message is broadcast and wasn't in the initial set
+                            return msg.status === 'broadcast' && !initialMessageIds.includes(msg.id);
+                        });
+
+                        if ((newMessages.length > 0 || newBroadcastMessages.length > 0) && enableSound) {
+                            console.log('New messages detected:', newMessages);
+                            console.log('New broadcast messages detected:', newBroadcastMessages);
+                            console.log('Playing notification sound');
+                            // Play notification sound for new messages
+                            playNotificationSound();
+
+                            // Update our stored IDs to include the new ones
+                            initialMessageIds = newMessageIds.slice();
+                        }
+                    }
+
                     // Filter out already read messages
                     messages = allMessages.filter(msg => !messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
 
@@ -177,7 +367,7 @@
 
                     // Check if all messages were deleted
                     const allMessagesDeleted = previousMessageIds.length > 0 && allMessages.length === 0;
-                    
+
                     // Display the first unread message if there are any
                     if (messages.length > 0) {
                         // If we were showing the default message and now we have real messages,
@@ -212,7 +402,7 @@
                         container.find('.broadcast-message-banner').removeClass('show');
                         container.find('#prevPage, #nextPage').hide();
                         container.find('table').hide();
-                        
+
                         // If all messages were deleted, show the default message
                         if (allMessagesDeleted && options.initialMessage) {
                             setTimeout(() => {
@@ -389,6 +579,102 @@
         }
 
         // Function to show broadcast banner with priority-based styling
+
+
+        // Function to play notification sound
+        function playNotificationSound() {
+            try {
+                if (!enableSound) {
+                    return;
+                }
+
+                // Try multiple approaches to play sound
+                var soundPlayed = false;
+
+                // Approach 1: Try Web Audio API first (works better with autoplay restrictions)
+                try {
+                    soundPlayed = soundOptions.createBeep();
+                    if (soundPlayed) {
+                        // Sound played successfully
+                        return;
+                    }
+                } catch (webAudioError) {
+                    // Web Audio API failed
+                }
+
+                // Approach 2: Try HTML5 Audio
+                try {
+                    // Reset the audio to the beginning if it's already playing
+                    notificationSound.pause();
+                    notificationSound.currentTime = 0;
+
+                    // Play the notification sound
+                    var playPromise = notificationSound.play();
+
+                    if (playPromise !== undefined) {
+                        playPromise.then(function () {
+                            // Notification sound played successfully
+                            soundPlayed = true;
+                        }).catch(function (error) {
+
+                            // Store a flag in sessionStorage to try playing on next user interaction
+                            sessionStorage.setItem('broadcastSoundPending', 'true');
+
+                            // Set up a one-time click handler to play sound on next user interaction
+                            if (!window.soundClickHandlerAttached) {
+                                $(document).one('click', function () {
+                                    if (sessionStorage.getItem('broadcastSoundPending') === 'true') {
+                                        sessionStorage.removeItem('broadcastSoundPending');
+                                        notificationSound.play().catch(function (e) {
+                                        });
+                                    }
+                                });
+                                window.soundClickHandlerAttached = true;
+                            }
+
+                            // Show a visual notification to encourage user interaction
+                            showSoundNotification();
+                        });
+                    }
+                } catch (audioError) {
+                    // HTML5 Audio failed completely
+                }
+            } catch (e) {
+                // Error with notification sound
+            }
+        }
+
+        // Function to show a visual notification when sound can't be played
+        function showSoundNotification() {
+            var notification = $('<div class="broadcast-sound-notification">🔔 New message received! Click anywhere to enable sound notifications.</div>');
+            notification.css({
+                'position': 'fixed',
+                'bottom': '20px',
+                'right': '20px',
+                'background-color': '#4CAF50',
+                'color': 'white',
+                'padding': '10px 15px',
+                'border-radius': '4px',
+                'box-shadow': '0 2px 5px rgba(0,0,0,0.3)',
+                'z-index': '10000',
+                'cursor': 'pointer',
+                'font-size': '14px'
+            });
+
+            $('body').append(notification);
+
+            notification.on('click', function () {
+                $(this).fadeOut(300, function () { $(this).remove(); });
+                notificationSound.play().catch(function (e) {
+                    console.log('Failed to play sound even after click:', e);
+                });
+            });
+
+            setTimeout(function () {
+                notification.fadeOut(500, function () { notification.remove(); });
+            }, 5000);
+        }
+
         function showBroadcastBanner(message, priority) {
             // Check if this message has been read before
             if (messageReadStatus[message]) {
@@ -422,5 +708,4 @@
             }
         }
     };
-
 }(jQuery));

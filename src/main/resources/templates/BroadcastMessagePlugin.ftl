@@ -42,7 +42,8 @@
                 "contextPath" : "${request.contextPath}",
                 "initialMessage" : "${message!}",
                 "initialPriority" : "${priority!"low"}",
-                "messagesData" : ${messagesData!"{}"}
+                "messagesData" : ${messagesData!"{}"}, 
+                "enableSound" : ${((plugin.getPropertyString("enableSound")!"true") == "true")?c}
             });
         });
     </script>

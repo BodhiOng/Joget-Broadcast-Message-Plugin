@@ -17,6 +17,7 @@ The Broadcast Message Plugin adds a notification banner at the top of Joget page
 - **Persistent Read Status**: Uses localStorage to remember which messages have been read across page refreshes
 - **WebSocket Communication**: Efficient real-time updates without page refreshes
 - **Background Message Checking**: Automatically checks for new messages every 10 seconds
+- **Notifications**: Provides sound alerts, browser notifications, and JavaScript alerts when new messages are broadcast
 
 ## Configuration
 
@@ -27,6 +28,44 @@ The plugin sources messages from a CRUD form with the following default configur
 - **Message Field ID**: message_text
 - **Priority Field ID**: priority
 - **Status Field ID**: status
+
+### Plugin Properties
+
+- **Enable Sound Notifications**: When set to "true" (default), plays a sound notification when new messages are broadcast
+
+### Testing Sound Notifications
+
+To manually test if sound notifications are working in your browser:
+
+1. Open the browser console (F12 or right-click > Inspect > Console)
+2. Try the following test functions:
+
+   - `testBroadcastSound()` - Tests all sound methods
+   - `testBroadcastBeep()` - Tests Web Audio API beep (works in most browsers)
+   - `testBroadcastMP3()` - Tests HTML5 Audio MP3 playback
+   - `testNotification()` - Tests the visual notification fallback
+   - `testBrowserNotification()` - Tests browser desktop notifications
+   - `testAlert()` - Tests JavaScript alert popup
+   - `simulateBroadcast()` - Simulates a real broadcast message from the server
+
+#### Troubleshooting Sound Issues
+
+If you don't hear any sound:
+
+1. **Browser Autoplay Restrictions**: Most browsers block automatic sound playback without user interaction. Click somewhere on the page first, then run the test function again.
+
+2. **Web Audio API Support**: If the MP3 playback doesn't work, the plugin will try to use the Web Audio API as a fallback. This is more widely supported across browsers.
+
+3. **Visual Notification Fallback**: If sound can't be played due to browser restrictions, a visual notification will appear prompting the user to click to enable sound.
+
+#### Debugging WebSocket Messages
+
+To debug WebSocket communication and sound triggers:
+
+1. Open the browser console (F12)
+2. Run `showLastWebSocketMessage()` to see the last message received from the server
+3. Check if the `newBroadcast` flag is set to `true` in the message
+4. If the flag is not `true`, check the server logs for messages about "New broadcast detected"
 
 ## CRUD Form Setup
 
@@ -48,3 +87,4 @@ To use the plugin with a CRUD form:
 - Users can click "Mark as Read" to dismiss a message
 - Read messages won't appear again in the user's browser (stored in localStorage)
 - When all messages are read, the banner disappears until new messages are available
+- When new messages are broadcast, a notification sound plays to alert users

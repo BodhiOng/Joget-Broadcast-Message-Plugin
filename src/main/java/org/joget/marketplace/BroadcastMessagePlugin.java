@@ -271,9 +271,12 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 // Create a new messagesData object with only the broadcast messages
                 Map<String, Object> broadcastMessagesData = new HashMap<>();
                 broadcastMessagesData.put("messages", broadcastMessages);
+                
+                // Add a special flag to force the client to check for broadcast messages
+                broadcastMessagesData.put("checkBroadcast", true);
 
-                // Send broadcast messages to the client
-                sendMessagesToClient(broadcastMessages, broadcastMessagesData, session);
+                // Send broadcast messages to the client - don't trigger sound on initial connection
+                sendMessagesToClient(broadcastMessages, broadcastMessagesData, session, false);
             } else {
                 // Fall back to default message if no messages found
                 sendMessageToClient(defaultBroadcastMessage, "System", session);
@@ -312,9 +315,10 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
      * @param messages       List of message maps
      * @param paginationData Pagination metadata
      * @param client         The WebSocket session
+     * @param isNewBroadcast Flag indicating if this is a new broadcast message
      */
     private static void sendMessagesToClient(List<Map<String, String>> messages, Map<String, Object> paginationData,
-            Session client) {
+            Session client, boolean isNewBroadcast) {
         try {
             JSONObject jsonResponse = new JSONObject();
 
@@ -340,6 +344,15 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             jsonResponse.put("totalMessages", messageCount);
             jsonResponse.put("totalPages", messageCount); // Each message is its own page
 
+            // Add flag for new broadcast messages to trigger sound
+            jsonResponse.put("newBroadcast", isNewBroadcast);
+            
+            // Add a special flag for forcing sound playback
+            if (isNewBroadcast) {
+                jsonResponse.put("forceSound", true);
+                jsonResponse.put("timestamp", System.currentTimeMillis()); // Unique timestamp to prevent caching
+            }
+            
             jsonResponse.put("timestamp", System.currentTimeMillis());
             jsonResponse.put("type", "messages");
 
@@ -347,6 +360,14 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         } catch (Exception e) {
             LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "sendMessagesToClient Error: " + e.getMessage());
         }
+    }
+    
+    /**
+     * Overloaded method for backward compatibility
+     */
+    private static void sendMessagesToClient(List<Map<String, String>> messages, Map<String, Object> paginationData,
+            Session client) {
+        sendMessagesToClient(messages, paginationData, client, false);
     }
 
     @Override
@@ -430,9 +451,22 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     }
 
     public String[] getPropertyOptions() {
-        // No configurable properties in this simplified version
-        String[] propertyOptions = {};
+        String[] propertyOptions = {
+            "enableSound"
+        };
         return propertyOptions;
+    }
+    
+    @Override
+    public Object[] getProperty(String property) {
+        if ("enableSound".equals(property)) {
+            return new Object[]{
+                "Enable Sound Notifications",
+                "true",
+                "Enable sound notifications for new broadcast messages"
+            };
+        }
+        return null;
     }
 
     /**
@@ -618,11 +652,24 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                     // Create a new messagesData object with only the broadcast messages
                     Map<String, Object> broadcastMessagesData = new HashMap<>();
                     broadcastMessagesData.put("messages", broadcastMessages);
+                    
+                    // Always set isNewBroadcast to true if there are any broadcast messages
+                    // This ensures sound plays even if the detection logic fails
+                    boolean isNewBroadcast = true;
+                    
+                    // Log broadcast information
+                    LogUtil.info(BroadcastMessagePlugin.class.getName(), 
+                        "Broadcasting messages, will trigger sound notification. " +
+                        "Number of messages: " + broadcastMessages.size() + ", " +
+                        "Changes: " + hasChanges + ", " +
+                        "First message: " + isFirstMessageAdded + ", " +
+                        "Status changes: " + hasStatusChanges + ", " +
+                        "Priority changes: " + hasPriorityChanges);
 
-                    // Broadcast to all connected clients
+                    // Broadcast to all clients
                     for (Session client : clients) {
                         if (client.isOpen()) {
-                            sendMessagesToClient(broadcastMessages, broadcastMessagesData, client);
+                            sendMessagesToClient(broadcastMessages, broadcastMessagesData, client, isNewBroadcast);
                         }
                     }
 
