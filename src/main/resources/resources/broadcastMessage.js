@@ -257,9 +257,10 @@
                         }
                     }
 
-                    // Also check for explicit flags from the server
-                    if ((data.newBroadcast === true || data.forceSound === true || data.checkBroadcast === true) && enableSound) {
-                        // Broadcast flag detected, playing sound
+                    // Only play sound if there are broadcast messages and explicit flags from the server
+                    const hasBroadcastMessages = allMessages.some(msg => msg.status === 'broadcast');
+                    if (hasBroadcastMessages && (data.newBroadcast === true || data.forceSound === true || data.checkBroadcast === true) && enableSound) {
+                        // Broadcast flag detected and has broadcast messages, playing sound
                         // Use Web Audio API directly since we know it works
                         soundOptions.createBeep();
 
@@ -344,16 +345,16 @@
                             return msg.status === 'broadcast' && !initialMessageIds.includes(msg.id);
                         });
 
-                        if ((newMessages.length > 0 || newBroadcastMessages.length > 0) && enableSound) {
-                            console.log('New messages detected:', newMessages);
+                        // Only play sound for new broadcast messages, not for all new messages
+                        if (newBroadcastMessages.length > 0 && enableSound) {
                             console.log('New broadcast messages detected:', newBroadcastMessages);
                             console.log('Playing notification sound');
-                            // Play notification sound for new messages
+                            // Play notification sound for new broadcast messages
                             playNotificationSound();
-
-                            // Update our stored IDs to include the new ones
-                            initialMessageIds = newMessageIds.slice();
                         }
+                        
+                        // Always update our stored IDs to include the new ones
+                        initialMessageIds = newMessageIds.slice();
                     }
 
                     // Filter out already read messages
