@@ -51,7 +51,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     private static boolean schedulerRunning = false;
 
     // Interval in seconds between message checks
-    private static final int CHECK_INTERVAL_SECONDS = 2; // Reduced from 10 to 2 seconds for more responsive updates
+    private static final int CHECK_INTERVAL_SECONDS = 2;
 
     @Override
     public String getName() {
@@ -85,11 +85,11 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
         try {
             // Hardcoded CRUD configuration
-            String appId = "broadcast_memo_plugin_app"; // Replace with your actual app ID
-            String formId = "broadcast_messagess"; // Replace with your actual form ID
-            String messageField = "message_text"; // Replace with your message field ID
-            String priorityField = "priority"; // Field for message priority
-            String statusField = "status"; // Field for broadcast status (checked = broadcast, unchecked = save only)
+            String appId = "broadcast_memo_plugin_app"; 
+            String formId = "broadcast_messagess"; 
+            String messageField = "message_text"; 
+            String priorityField = "priority"; 
+            String statusField = "status";
 
             // Get the AppDefinition
             AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
@@ -138,15 +138,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
 
                 return Integer.compare(p1Value, p2Value); // Lower number = higher priority
             });
-
-            // Log the sorted messages for debugging
-            LogUtil.info(BroadcastMessagePlugin.class.getName(),
-                    "Sorted messages by priority: " + messages.size() + " messages");
-            for (Map<String, String> msg : messages) {
-                LogUtil.info(BroadcastMessagePlugin.class.getName(),
-                        "Message: " + msg.get("text") + ", Priority: " + msg.get("priority"));
-            }
-
         } catch (Exception e) {
             LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "Error fetching messages from CRUD");
         }
@@ -258,8 +249,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             startMessageCheckScheduler();
             
             if (messages != null && !messages.isEmpty()) {
-                // Filter messages to only include those with status='broadcast' for
-                // broadcasting
+                // Filter messages to only include those with status='broadcast' for broadcasting
                 List<Map<String, String>> broadcastMessages = new ArrayList<>();
                 for (Map<String, String> message : messages) {
                     String statusValue = message.get("status");
@@ -312,9 +302,9 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
     /**
      * Sends multiple messages to a client with pagination metadata
      * 
-     * @param messages       List of message maps
+     * @param messages List of message maps
      * @param paginationData Pagination metadata
-     * @param client         The WebSocket session
+     * @param client The WebSocket session
      * @param isNewBroadcast Flag indicating if this is a new broadcast message
      */
     private static void sendMessagesToClient(List<Map<String, String>> messages, Map<String, Object> paginationData,
@@ -360,14 +350,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
         } catch (Exception e) {
             LogUtil.error(BroadcastMessagePlugin.class.getName(), e, "sendMessagesToClient Error: " + e.getMessage());
         }
-    }
-    
-    /**
-     * Overloaded method for backward compatibility
-     */
-    private static void sendMessagesToClient(List<Map<String, String>> messages, Map<String, Object> paginationData,
-            Session client) {
-        sendMessagesToClient(messages, paginationData, client, false);
     }
 
     @Override
@@ -478,8 +460,6 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
             // Scheduler is already running
             return;
         }
-
-        // Start the scheduler with the configured interval
 
         // Create a new scheduler if needed
         if (scheduler == null || scheduler.isShutdown()) {
@@ -639,8 +619,7 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                 // If there are changes, deleted messages, or we're in the initial state, broadcast to all clients
                 if (hasChanges || hasPriorityChanges || hasStatusChanges || isFirstMessageAdded || isInitialState || hasDeletedMessages) {
 
-                    // Filter messages to only include those with status='broadcast' for
-                    // broadcasting
+                    // Filter messages to only include those with status='broadcast' for broacasting
                     List<Map<String, String>> broadcastMessages = new ArrayList<>();
                     for (Map<String, String> message : messages) {
                         String statusValue = message.get("status");
@@ -654,18 +633,8 @@ public class BroadcastMessagePlugin extends UiHtmlInjectorPluginAbstract impleme
                     broadcastMessagesData.put("messages", broadcastMessages);
                     
                     // Always set isNewBroadcast to true if there are any broadcast messages
-                    // This ensures sound plays even if the detection logic fails
                     boolean isNewBroadcast = true;
                     
-                    // Log broadcast information
-                    LogUtil.info(BroadcastMessagePlugin.class.getName(), 
-                        "Broadcasting messages, will trigger sound notification. " +
-                        "Number of messages: " + broadcastMessages.size() + ", " +
-                        "Changes: " + hasChanges + ", " +
-                        "First message: " + isFirstMessageAdded + ", " +
-                        "Status changes: " + hasStatusChanges + ", " +
-                        "Priority changes: " + hasPriorityChanges);
-
                     // Broadcast to all clients
                     for (Session client : clients) {
                         if (client.isOpen()) {

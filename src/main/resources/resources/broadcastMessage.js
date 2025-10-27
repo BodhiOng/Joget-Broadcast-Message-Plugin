@@ -83,7 +83,7 @@
                 }
             });
 
-            // Filter out already read messages
+            // Filter out read messages
             messages = allMessages.filter(msg => !messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
 
             totalPages = messages.length;
@@ -116,7 +116,7 @@
                 container.find('table').hide();
             }
         } else if (initialMessage && initialMessage.trim() !== "") {
-            // Fallback to initial message if no messages data, but only if not already read
+            // Fallback to initial message if no messages data, but only if unread
             if (!messageReadStatus[initialMessage]) {
                 // Use the provided initialPriority
                 showBroadcastBanner(initialMessage, initialPriority);
@@ -173,21 +173,16 @@
                                 const previousStatus = messageStatuses[msg.id];
                                 const currentStatus = msg.status || null;
 
-                                console.log('Message ID ' + msg.id + ': Previous status=' + previousStatus + ', Current status=' + currentStatus);
-
                                 // Check for status changes
                                 if (previousStatus === 'broadcast' && currentStatus !== 'broadcast') {
                                     // Changed FROM broadcast - don't play sound
                                     unbroadcastDetected = true;
-                                    console.log('Message ID ' + msg.id + ' changed FROM broadcast status to ' + currentStatus);
                                 } else if (previousStatus !== 'broadcast' && currentStatus === 'broadcast') {
                                     // Changed TO broadcast - play sound
                                     newBroadcastDetected = true;
-                                    console.log('Message ID ' + msg.id + ' changed TO broadcast status');
                                 } else if (!previousStatus && currentStatus === 'broadcast') {
                                     // New message with broadcast status
                                     newBroadcastDetected = true;
-                                    console.log('New message with broadcast status: ' + msg.id);
                                 }
 
                                 // Update status tracking
@@ -196,7 +191,6 @@
                         });
 
                         // Only play sound for new broadcasts or status changes TO broadcast
-                        // NEVER play sound when any message is unbroadcast
                         if (!unbroadcastDetected) {
                             const hasBroadcastMessages = allMessages.some(msg => msg.status === 'broadcast');
                             if (hasBroadcastMessages && newBroadcastDetected) {
@@ -205,28 +199,14 @@
                                 const messageText = broadcastMessage ? broadcastMessage.text : 'New broadcast message received';
 
                                 // Play sound for new broadcast
-                                console.log('Playing sound for new broadcast: ' + messageText);
                                 soundOptions.createBeep();
                             }
-                        } else {
-                            console.log('Suppressing sound because a message was unbroadcast');
-                        }
+                        } 
                     }
 
                     // Check if we're currently showing the default message or no message
                     const currentText = container.find('#broadcastText').text();
                     const isShowingDefaultMessage = currentText === options.initialMessage || currentText === "";
-
-                    // Log the transition for debugging
-                    if (isShowingDefaultMessage && allMessages.length > 0) {
-                        console.log('Transitioning from default/empty message to real messages');
-
-                        // Check if any of the new messages have broadcast status
-                        const hasBroadcastMessages = allMessages.some(msg => msg.status === 'broadcast');
-                        if (hasBroadcastMessages) {
-                            console.log('Found messages with broadcast status - will update display');
-                        }
-                    }
 
                     // Check for priority changes in currently displayed message
                     let currentlyDisplayedMessage = null;
@@ -247,14 +227,10 @@
 
                                 // Check if priority has changed
                                 if (messagePriorities[msg.id] && messagePriorities[msg.id] !== msg.priority) {
-                                    console.log('Priority changed for message ID: ' + msg.id +
-                                        ', Previous: ' + messagePriorities[msg.id] +
-                                        ', New: ' + msg.priority);
                                     priorityChanges = true;
 
                                     // If this is the currently displayed message, update its color immediately
                                     if (currentlyDisplayedMessage && currentlyDisplayedMessage.id === msg.id) {
-                                        console.log('Updating color for currently displayed message');
                                         updateMessagePriority(msg.id, msg.priority);
                                     }
                                 }
@@ -275,19 +251,11 @@
                     const previousMessageIds = messages.map(msg => msg.id).filter(id => id); // Get non-null IDs
                     const newMessageIds = allMessages.map(msg => msg.id).filter(id => id); // Get non-null IDs
 
-                    // Find deleted message IDs (in previous but not in new)
-                    const deletedMessageIds = previousMessageIds.filter(id => !newMessageIds.includes(id));
-
-                    if (deletedMessageIds.length > 0) {
-                        console.log('Detected deleted messages:', deletedMessageIds);
-                    }
-
                     // Special handling for first load vs. subsequent updates
                     if (isFirstMessageLoad) {
                         // On first load, just store the IDs without playing sound
                         initialMessageIds = newMessageIds.slice();
                         isFirstMessageLoad = false;
-                        console.log('Initial message IDs stored:', initialMessageIds);
                     } else {
                         // On subsequent loads, check for new messages
                         const newMessages = newMessageIds.filter(id => !initialMessageIds.includes(id));
@@ -300,8 +268,6 @@
 
                         // Only play sound for new broadcast messages, not for all new messages
                         if (newBroadcastMessages.length > 0) {
-                            console.log('New broadcast messages detected:', newBroadcastMessages);
-                            console.log('Playing notification sound');
                             // Play notification sound for new broadcast messages
                             playNotificationSound();
                         }
@@ -324,10 +290,7 @@
 
                     // Display the first unread message if there are any
                     if (messages.length > 0) {
-                        // If we were showing the default message and now we have real messages,
-                        // make sure to replace the default message with the new real message
                         if (isShowingDefaultMessage) {
-                            console.log('Replacing default message with first real message');
                             container.find('.broadcast-message-banner').removeClass('show');
                             setTimeout(() => {
                                 showMessage(messages[0]);
@@ -338,7 +301,6 @@
                             showMessage(messages[0]);
                             // Double-check that the banner is visible
                             if (!container.find('.broadcast-message-banner').hasClass('show')) {
-                                console.log('Forcing banner visibility');
                                 container.find('.broadcast-message-banner').addClass('show');
                             }
                         }
@@ -349,10 +311,6 @@
                             container.find('table').css('display', 'inline-table');
                         }
                     } else {
-                        // No unread messages or all messages were deleted - hide everything
-                        if (allMessagesDeleted) {
-                            console.log('All messages were deleted - hiding banner');
-                        }
                         container.find('.broadcast-message-banner').removeClass('show');
                         container.find('#prevPage, #nextPage').hide();
                         container.find('table').hide();
@@ -518,8 +476,6 @@
 
                     // Apply the new priority class
                     container.find('.broadcast-message-banner').addClass('priority-' + newPriority.toLowerCase());
-
-                    console.log('Updated banner color to priority:', newPriority);
                 }
             }
         }
@@ -576,6 +532,29 @@
         }
 
         function showBroadcastBanner(message, priority) {
+            // Special handling for initial message - always show it
+            if (message === options.initialMessage) {
+                // Only show if we have an actual message
+                if (message && message.trim() !== "") {
+                    // Remove all priority classes first
+                    container.find('.broadcast-message-banner')
+                        .removeClass('priority-high priority-medium priority-low');
+
+                    // Apply the appropriate priority class
+                    if (priority) {
+                        container.find('.broadcast-message-banner').addClass('priority-' + priority.toLowerCase());
+                    } else {
+                        // Default to low priority if not specified
+                        container.find('.broadcast-message-banner').addClass('priority-low');
+                    }
+
+                    container.find('#broadcastText').text(message);
+                    container.find('.broadcast-message-banner').addClass('show');
+                }
+                return;
+            }
+
+            // Normal message handling
             // Check if this message has been read before
             if (messageReadStatus[message]) {
                 // User has already read this message - hide the banner
@@ -599,9 +578,6 @@
 
                 container.find('#broadcastText').text(message);
                 container.find('.broadcast-message-banner').addClass('show');
-
-                // Log the priority for debugging
-                console.log('Showing message with priority:', priority);
             } else {
                 // No message to show
                 container.find('.broadcast-message-banner').removeClass('show');

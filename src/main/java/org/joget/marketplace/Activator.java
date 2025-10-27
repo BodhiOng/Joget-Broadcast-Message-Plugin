@@ -1,14 +1,13 @@
 package org.joget.marketplace;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collection;
+
+import org.joget.commons.util.LogUtil;
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.lang.reflect.Method;
-
-import org.joget.commons.util.LogUtil;
 
 public class Activator implements BundleActivator {
 
@@ -17,7 +16,7 @@ public class Activator implements BundleActivator {
     public void start(BundleContext context) {
         registrationList = new ArrayList<ServiceRegistration>();
 
-        //Register plugins here
+        // Register plugin here
         registrationList.add(context.registerService(BroadcastMessagePlugin.class.getName(), new BroadcastMessagePlugin(), null));
     }
 
