@@ -66,6 +66,8 @@
         let messagePriorities = {};
         let messageStatuses = {};
 
+        let pendingResurrectionId = null;
+
         // Initialize message data
         if (messagesData && messagesData.messages) {
             // Get all messages
@@ -164,6 +166,9 @@
 
                     // Process received messages
                     if (allMessages.length > 0) {
+                        // Track the first message that was re-enabled (changed to broadcast)
+                        let resurrectedMessageId = null;
+
                         // Track status changes
                         let newBroadcastDetected = false;
                         let unbroadcastDetected = false;
@@ -180,9 +185,35 @@
                                 } else if (previousStatus !== 'broadcast' && currentStatus === 'broadcast') {
                                     // Changed TO broadcast - play sound
                                     newBroadcastDetected = true;
+                                    // Clear any stored "read" flags so this memo is shown again
+                                    try {
+                                        if (messageReadStatus[msg.id]) {
+                                            delete messageReadStatus[msg.id];
+                                        }
+                                        if (msg.text && messageReadStatus[msg.text]) {
+                                            delete messageReadStatus[msg.text];
+                                        }
+                                        localStorage.setItem('broadcastMessageReadStatus', JSON.stringify(messageReadStatus));
+                                    } catch (e) { /* no-op */ }
+                                    // Remember this message to prioritize redisplay
+                                    if (!resurrectedMessageId) {
+                                        resurrectedMessageId = msg.id;
+                                    }
+                                    pendingResurrectionId = msg.id;
                                 } else if (!previousStatus && currentStatus === 'broadcast') {
                                     // New message with broadcast status
                                     newBroadcastDetected = true;
+                                    // Ensure any prior read flags are cleared and prioritize display
+                                    try {
+                                        if (messageReadStatus[msg.id]) {
+                                            delete messageReadStatus[msg.id];
+                                        }
+                                        if (msg.text && messageReadStatus[msg.text]) {
+                                            delete messageReadStatus[msg.text];
+                                        }
+                                        localStorage.setItem('broadcastMessageReadStatus', JSON.stringify(messageReadStatus));
+                                    } catch (e) { /* no-op */ }
+                                    pendingResurrectionId = msg.id;
                                 }
 
                                 // Update status tracking
@@ -201,7 +232,7 @@
                                 // Play sound for new broadcast
                                 soundOptions.createBeep();
                             }
-                        } 
+                        }
                     }
 
                     // Check if we're currently showing the default message or no message
@@ -276,8 +307,11 @@
                         initialMessageIds = newMessageIds.slice();
                     }
 
-                    // Filter out already read messages
-                    messages = allMessages.filter(msg => !messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
+                    // Filter out already read messages, but always include a just-resurrected memo
+                    messages = allMessages.filter(msg => {
+                        const isResurrected = pendingResurrectionId && msg.id === pendingResurrectionId;
+                        return isResurrected || (!messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
+                    });
 
                     // Set the correct total pages based on unread messages length
                     totalPages = messages.length;
@@ -290,15 +324,26 @@
 
                     // Display the first unread message if there are any
                     if (messages.length > 0) {
+                        // Prefer to show the message that was just re-enabled (if any)
+                        let selectedMessage = messages[0];
+                        if (pendingResurrectionId) {
+                            const resurrectedIndex = messages.findIndex(m => m.id === pendingResurrectionId);
+                            if (resurrectedIndex >= 0) {
+                                selectedMessage = messages[resurrectedIndex];
+                                currentPage = resurrectedIndex + 1;
+                                updatePaginationDisplay();
+                            }
+                        }
+
                         if (isShowingDefaultMessage) {
                             container.find('.broadcast-message-banner').removeClass('show');
                             setTimeout(() => {
-                                showMessage(messages[0]);
+                                showMessage(selectedMessage);
                                 // Force the banner to be visible
                                 container.find('.broadcast-message-banner').addClass('show');
                             }, 100); // Small delay to ensure visual transition
                         } else {
-                            showMessage(messages[0]);
+                            showMessage(selectedMessage);
                             // Double-check that the banner is visible
                             if (!container.find('.broadcast-message-banner').hasClass('show')) {
                                 container.find('.broadcast-message-banner').addClass('show');
@@ -346,7 +391,7 @@
         };
 
         // Mark as Read button functionality
-        container.find('#broadcastClose').on('click', function () {
+        container.find('#broadcastClose').off('click').on('click', function () {
             // Get current message ID and text
             const currentMessageIndex = currentPage - 1;
             if (messages.length > 0 && currentMessageIndex >= 0 && currentMessageIndex < messages.length) {
@@ -354,29 +399,100 @@
                 const messageId = currentMessage.id;
                 const messageText = currentMessage.text;
 
-                // Store both ID and text in localStorage
+                // Mark only this memo as read (prefer ID; fall back to text when no ID)
                 if (messageId) {
                     messageReadStatus[messageId] = true;
-                    // Also store by text as fallback
-                    if (messageText) {
-                        messageReadStatus[messageText] = true;
+                    if (messageText && messageReadStatus[messageText]) {
+                        delete messageReadStatus[messageText];
                     }
-
-                    localStorage.setItem('broadcastMessageReadStatus', JSON.stringify(messageReadStatus));
-
-                    // Hide the current message
-                    container.find('.broadcast-message-banner').removeClass('show');
-
-                    // Move to the next unread message if available
-                    findAndShowNextUnreadMessage();
+                } else if (messageText) {
+                    messageReadStatus[messageText] = true;
                 }
+
+                localStorage.setItem('broadcastMessageReadStatus', JSON.stringify(messageReadStatus));
+
+                // Hide the current message and advance to next unread
+                container.find('.broadcast-message-banner').removeClass('show');
+                findAndShowNextUnreadMessage();
+            }
+        });
+
+        // Pagination controls
+        container.find('#prevPage').off('click').on('click', function () {
+            if (currentPage > 1) {
+                currentPage--;
+                showCurrentMessage();
+                updatePaginationDisplay();
+            }
+        });
+
+        container.find('#nextPage').off('click').on('click', function () {
+            if (currentPage < totalPages) {
+                currentPage++;
+                showCurrentMessage();
+                updatePaginationDisplay();
+            }
+        });
+
+        // Function to show the current message based on currentPage
+        function showCurrentMessage() {
+            if (messages.length > 0 && currentPage > 0 && currentPage <= messages.length) {
+                // Show the message at the current page index (0-based array)
+                showMessage(messages[currentPage - 1]);
+            }
+        }
+
+        // Force pagination buttons to be visible if there are multiple messages
+        if (messages.length > 1) {
+            container.find('#prevPage, #nextPage').css('display', 'inline-block');
+            container.find('table').css('display', 'inline-table');
+        } else {
+            container.find('.broadcast-message-banner').removeClass('show');
+            container.find('#prevPage, #nextPage').hide();
+            container.find('table').hide();
+        }
+
+        ws.onclose = function (event) {
+            // Connection closed
+        };
+
+        ws.onerror = function (event) {
+            // WebSocket error
+        };
+
+        // Mark as Read button functionality
+        container.find('#broadcastClose').off('click').on('click', function () {
+            // Get current message ID and text
+            const currentMessageIndex = currentPage - 1;
+            if (messages.length > 0 && currentMessageIndex >= 0 && currentMessageIndex < messages.length) {
+                const currentMessage = messages[currentMessageIndex];
+                const messageId = currentMessage.id;
+                const messageText = currentMessage.text;
+
+                // Mark only this memo as read (prefer ID; fall back to text when no ID)
+                if (messageId) {
+                    messageReadStatus[messageId] = true;
+                    if (messageText && messageReadStatus[messageText]) {
+                        delete messageReadStatus[messageText];
+                    }
+                } else if (messageText) {
+                    messageReadStatus[messageText] = true;
+                }
+
+                localStorage.setItem('broadcastMessageReadStatus', JSON.stringify(messageReadStatus));
+
+                // Hide the current message
+                container.find('.broadcast-message-banner').removeClass('show');
+
+                // Move to the next unread message if available
+                findAndShowNextUnreadMessage();
             }
         });
 
         // Function to find and show the next unread message
         function findAndShowNextUnreadMessage() {
-            // Filter out read messages
-            const unreadMessages = messages.filter(msg => !messageReadStatus[msg.id]);
+            // Filter out read messages (respect both ID and legacy text flags)
+            const unreadMessages = messages.filter(msg => !messageReadStatus[msg.id] && !messageReadStatus[msg.text]);
 
             if (unreadMessages.length > 0) {
                 // Update the messages array with only unread messages
@@ -475,7 +591,8 @@
                         .removeClass('priority-high priority-medium priority-low');
 
                     // Apply the new priority class
-                    container.find('.broadcast-message-banner').addClass('priority-' + newPriority.toLowerCase());
+                    const normalized = (newPriority || 'low').toLowerCase();
+                    container.find('.broadcast-message-banner').addClass('priority-' + normalized);
                 }
             }
         }
@@ -483,22 +600,32 @@
         // Function to show a message object
         function showMessage(message) {
             if (message && message.text) {
+                // If this message was just re-enabled, ensure any read flags are cleared
+                if (pendingResurrectionId && message.id === pendingResurrectionId) {
+                    try {
+                        let changed = false;
+                        if (messageReadStatus[message.id]) { delete messageReadStatus[message.id]; changed = true; }
+                        if (messageReadStatus[message.text]) { delete messageReadStatus[message.text]; changed = true; }
+                        if (changed) {
+                            localStorage.setItem('broadcastMessageReadStatus', JSON.stringify(messageReadStatus));
+                        }
+                    } catch (e) { }
+                    // Clear resurrection pointer after preparing to show
+                    pendingResurrectionId = null;
+                }
                 // Show the message text in the banner and apply priority-based styling
                 showBroadcastBanner(message.text, message.priority);
             }
         }
 
-        // Function to play notification sound
+        // Function to play notification sound (with visual fallback)
         function playNotificationSound() {
             try {
-                // Try Web Audio API
                 var success = soundOptions.createBeep();
                 if (!success) {
-                    // If Web Audio API fails, show visual notification
                     showSoundNotification();
                 }
             } catch (e) {
-                // If there's an error, show visual notification
                 showSoundNotification();
             }
         }
@@ -531,55 +658,35 @@
             }, 5000);
         }
 
+        // Function to render the banner text and priority, respecting read status
         function showBroadcastBanner(message, priority) {
             // Special handling for initial message - always show it
             if (message === options.initialMessage) {
-                // Only show if we have an actual message
-                if (message && message.trim() !== "") {
-                    // Remove all priority classes first
+                if (message && message.trim() !== '') {
                     container.find('.broadcast-message-banner')
                         .removeClass('priority-high priority-medium priority-low');
-
-                    // Apply the appropriate priority class
-                    if (priority) {
-                        container.find('.broadcast-message-banner').addClass('priority-' + priority.toLowerCase());
-                    } else {
-                        // Default to low priority if not specified
-                        container.find('.broadcast-message-banner').addClass('priority-low');
-                    }
-
+                    const normalized = ((priority || 'low') + '').toLowerCase();
+                    container.find('.broadcast-message-banner').addClass('priority-' + normalized);
                     container.find('#broadcastText').text(message);
                     container.find('.broadcast-message-banner').addClass('show');
                 }
                 return;
             }
 
-            // Normal message handling
-            // Check if this message has been read before
+            // Hide if previously read (unless we already cleared it above)
             if (messageReadStatus[message]) {
-                // User has already read this message - hide the banner
                 container.find('.broadcast-message-banner').removeClass('show');
                 return;
             }
 
-            // Only show if we have an actual message
-            if (message && message.trim() !== "") {
-                // Remove all priority classes first
+            if (message && message.trim() !== '') {
                 container.find('.broadcast-message-banner')
                     .removeClass('priority-high priority-medium priority-low');
-
-                // Apply the appropriate priority class
-                if (priority) {
-                    container.find('.broadcast-message-banner').addClass('priority-' + priority.toLowerCase());
-                } else {
-                    // Default to low priority if not specified
-                    container.find('.broadcast-message-banner').addClass('priority-low');
-                }
-
+                const normalized = ((priority || 'low') + '').toLowerCase();
+                container.find('.broadcast-message-banner').addClass('priority-' + normalized);
                 container.find('#broadcastText').text(message);
                 container.find('.broadcast-message-banner').addClass('show');
             } else {
-                // No message to show
                 container.find('.broadcast-message-banner').removeClass('show');
             }
         }
